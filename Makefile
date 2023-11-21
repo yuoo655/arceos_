@@ -19,9 +19,7 @@
 #     - `ACCEL`: Enable hardware acceleration (KVM on linux)
 #     - `QEMU_LOG`: Enable QEMU logging (log file is "qemu.log")
 #     - `NET_DUMP`: Enable network packet dump (log file is "netdump.pcap")
-#     - `NET_DEV`: QEMU netdev backend types: user, tap, bridge
-#     - `VFIO_PCI`: PCI device address in the format "bus:dev.func" to passthrough
-#     - `VHOST`: Enable vhost-net for tap backend (only for `NET_DEV=tap`)
+#     - `NET_DEV`: QEMU netdev backend types: user, tap
 # * Network options:
 #     - `IP`: ArceOS IPv4 address (default is 10.0.2.15 for QEMU user netdev)
 #     - `GW`: Gateway IPv4 address (default is 10.0.2.2 for QEMU user netdev)
@@ -50,8 +48,6 @@ DISK_IMG ?= disk.img
 QEMU_LOG ?= n
 NET_DUMP ?= n
 NET_DEV ?= user
-VFIO_PCI ?=
-VHOST ?= n
 
 # Network options
 IP ?= 10.0.2.15
@@ -149,6 +145,8 @@ ifeq ($(PLATFORM_NAME), aarch64-raspi4)
   include scripts/make/raspi4.mk
 else ifeq ($(PLATFORM_NAME), aarch64-bsta1000b)
   include scripts/make/bsta1000b-fada.mk
+else ifeq ($(PLATFORM_NAME), riscv64-starfive)
+  include scripts/make/starfive.mk
 endif
 
 build: $(OUT_DIR) $(OUT_BIN)

@@ -5,6 +5,8 @@
 #include <sys/time.h>
 #include <time.h>
 
+#include <axlibc.h>
+
 long timezone = 0;
 const char __utc[] = "UTC";
 
@@ -18,6 +20,14 @@ const int HOUR_PER_DAY = 24;
 #define DAYS_PER_400Y (365 * 400 + 97)
 #define DAYS_PER_100Y (365 * 100 + 24)
 #define DAYS_PER_4Y   (365 * 4 + 1)
+
+#ifdef AX_CONFIG_ALLOC
+size_t strftime(char *restrict buf, size_t size, const char *restrict format,
+                const struct tm *restrict timeptr)
+{
+    return ax_strftime(buf, size, format, timeptr);
+}
+#endif
 
 int __secs_to_tm(long long t, struct tm *tm)
 {
@@ -142,7 +152,7 @@ struct tm *localtime(const time_t *timep)
 time_t time(time_t *t)
 {
     struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
+    ax_clock_gettime(&ts);
     time_t ret = ts.tv_sec;
     if (t)
         *t = ret;
@@ -165,6 +175,17 @@ int utimes(const char *filename, const struct timeval times[2])
 {
     unimplemented();
     return 0;
+}
+
+// TODO: Should match _clk,
+int clock_gettime(clockid_t _clk, struct timespec *ts)
+{
+    return ax_clock_gettime(ts);
+}
+
+int nanosleep(const struct timespec *req, struct timespec *rem)
+{
+    return ax_nanosleep(req, rem);
 }
 
 // TODO
@@ -201,3 +222,8 @@ double difftime(time_t t1, time_t t0)
     return t1 - t0;
 }
 #endif
+
+time_t mktime(struct tm *tm)
+{
+    return ax_mktime(tm);
+}

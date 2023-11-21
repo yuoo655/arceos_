@@ -10,7 +10,6 @@ pub trait WriteByte: fmt::Write {
 }
 
 struct StringWriter(pub *mut u8, pub usize);
-
 impl Write for StringWriter {
     fn write(&mut self, buf: &[u8]) -> axerrno::AxResult<usize> {
         if self.1 > 1 {
@@ -97,7 +96,7 @@ impl<T: Write> Write for CountingWriter<T> {
     }
 }
 
-unsafe fn strftime_inner<W: WriteByte>(
+unsafe fn strftime<W: WriteByte>(
     w: W,
     format: *const c_char,
     t: *const ctypes::tm,
@@ -209,7 +208,7 @@ unsafe fn strftime_inner<W: WriteByte>(
                 b'r' => w!(recurse "%I:%M:%S %p"),
                 b'R' => w!(recurse "%H:%M"),
                 // Nothing is modified in mktime, but the C standard of course requires a mutable pointer ._.
-                b's' => w!("{}", super::mktime(t as *mut ctypes::tm)),
+                b's' => w!("{}", super::ax_mktime(t as *mut ctypes::tm)),
                 b'S' => w!("{:02}", (*t).tm_sec),
                 b'T' => w!(recurse "%H:%M:%S"),
                 b'u' => w!("{}", ((*t).tm_wday + 7 - 1) % 7 + 1),
@@ -237,15 +236,15 @@ unsafe fn strftime_inner<W: WriteByte>(
     w.written
 }
 
-/// Convert date and time to a string.
+/// `strftime` implementation
 #[no_mangle]
-pub unsafe extern "C" fn strftime(
+pub unsafe extern "C" fn ax_strftime(
     buf: *mut c_char,
     size: ctypes::size_t,
     format: *const c_char,
     timeptr: *const ctypes::tm,
 ) -> ctypes::size_t {
-    let ret = strftime_inner(StringWriter(buf as *mut u8, size), format, timeptr);
+    let ret = strftime(StringWriter(buf as *mut u8, size), format, timeptr);
     if ret < size {
         ret
     } else {

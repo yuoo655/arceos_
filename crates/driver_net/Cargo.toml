@@ -12,6 +12,7 @@ documentation = "https://rcore-os.github.io/arceos/driver_net/index.html"
 [features]
 default = []
 ixgbe = ["dep:ixgbe-driver"]
+starfive = []
 
 [dependencies]
 spin = "0.9"

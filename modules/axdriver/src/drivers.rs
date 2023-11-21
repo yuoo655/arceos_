@@ -128,3 +128,20 @@ cfg_if::cfg_if! {
         }
     }
 }
+
+cfg_if::cfg_if! {
+    if #[cfg(net_dev = "starfive")] {
+        use crate::starfive::StarfiveHalImpl;
+        pub struct StarfiveNicDriver;
+        register_net_driver!(StarfiveNicDriver, driver_net::starfive::StarfiveNic);
+
+        impl DriverProbe for StarfiveNicDriver {
+            fn probe_global() -> Option<AxDeviceEnum> {
+                log::info!("satrfive-nic----------------------probe");
+                use driver_net::starfive::StarfiveNic;
+                let starfive_nic = StarfiveNic::<StarfiveHalImpl>::init();
+                return Some(AxDeviceEnum::from_net(starfive_nic));
+            }
+        }
+    }
+}

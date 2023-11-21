@@ -1,11 +1,9 @@
+#include <axlibc.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
 
 #ifdef AX_CONFIG_FD
-
-// TODO: remove this function in future work
-int ax_fcntl(int fd, int cmd, size_t arg);
 
 int fcntl(int fd, int cmd, ... /* arg */)
 {
@@ -21,9 +19,6 @@ int fcntl(int fd, int cmd, ... /* arg */)
 #endif // AX_CONFIG_FD
 
 #ifdef AX_CONFIG_FS
-
-// TODO: remove this function in future work
-int ax_open(const char *filename, int flags, mode_t mode);
 
 int open(const char *filename, int flags, ...)
 {

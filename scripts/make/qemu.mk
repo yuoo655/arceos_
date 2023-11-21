@@ -36,18 +36,9 @@ qemu_args-$(NET) += \
 ifeq ($(NET_DEV), user)
   qemu_args-$(NET) += -netdev user,id=net0,hostfwd=tcp::5555-:5555,hostfwd=udp::5555-:5555
 else ifeq ($(NET_DEV), tap)
-  qemu_args-$(NET) += -netdev tap,id=net0,script=scripts/net/qemu-ifup.sh,downscript=no,vhost=$(VHOST),vhostforce=$(VHOST)
-  QEMU := sudo $(QEMU)
-else ifeq ($(NET_DEV), bridge)
-  qemu_args-$(NET) += -netdev bridge,id=net0,br=virbr0
-  QEMU := sudo $(QEMU)
+  qemu_args-$(NET) += -netdev tap,id=net0,ifname=tap0,script=no,downscript=no
 else
-  $(error "NET_DEV" must be one of "user", "tap", or "bridge")
-endif
-
-ifneq ($(VFIO_PCI),)
-  qemu_args-y += --device vfio-pci,host=$(VFIO_PCI)
-  QEMU := sudo $(QEMU)
+  $(error "NET_DEV" must be one of "user" or "tap")
 endif
 
 ifeq ($(NET_DUMP), y)

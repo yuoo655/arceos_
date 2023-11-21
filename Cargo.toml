@@ -50,7 +50,6 @@ members = [
 
     "api/axfeat",
     "api/arceos_api",
-    "api/arceos_posix_api",
 
     "ulib/axstd",
     "ulib/axlibc",
@@ -65,6 +64,7 @@ members = [
     "apps/net/httpserver",
     "apps/net/udpserver",
     "apps/net/bwbench",
+    "apps/net/starfive",
     "apps/task/parallel",
     "apps/task/sleep",
     "apps/task/yield",

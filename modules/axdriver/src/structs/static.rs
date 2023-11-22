@@ -4,6 +4,8 @@ pub use crate::drivers::AxBlockDevice;
 pub use crate::drivers::AxDisplayDevice;
 #[cfg(feature = "net")]
 pub use crate::drivers::AxNetDevice;
+#[cfg(feature = "phy")]
+pub use crate::drivers::AxPhyDevice;
 
 impl super::AxDeviceEnum {
     /// Constructs a network device.
@@ -11,7 +13,10 @@ impl super::AxDeviceEnum {
     pub const fn from_net(dev: AxNetDevice) -> Self {
         Self::Net(dev)
     }
-
+    #[cfg(feature = "phy")]
+    pub const fn from_phy(dev: AxPhyDevice) -> Self {
+        Self::Phy(dev)
+    }
     /// Constructs a block device.
     #[cfg(feature = "block")]
     pub const fn from_block(dev: AxBlockDevice) -> Self {

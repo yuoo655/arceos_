@@ -1,16 +1,13 @@
-#![cfg_attr(feature = "axstd", no_std)]
-#![cfg_attr(feature = "axstd", no_main)]
+#![no_std]
+#![no_main]
 
 #[macro_use]
-#[cfg(feature = "axstd")]
-extern crate axstd as std;
+extern crate libax;
+extern crate alloc;
 
-use std::sync::Arc;
-use std::{thread, time};
-use std::{vec, vec::Vec};
-
-#[cfg(any(feature = "axstd", target_os = "arceos"))]
-use std::os::arceos::api::task::ax_set_current_priority;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+use libax::thread;
 
 struct TaskParam {
     data_len: usize,
@@ -59,11 +56,9 @@ fn load(n: &u64) -> u64 {
     sum
 }
 
-#[cfg_attr(feature = "axstd", no_mangle)]
+#[no_mangle]
 fn main() {
-    #[cfg(feature = "axstd")]
-    ax_set_current_priority(-20).ok();
-
+    thread::set_priority(-20);
     let data = (0..PAYLOAD_KIND)
         .map(|i| Arc::new(vec![TASK_PARAMS[i].value; TASK_PARAMS[i].data_len]))
         .collect::<Vec<_>>();
@@ -73,17 +68,15 @@ fn main() {
     }
 
     let mut tasks = Vec::with_capacity(PAYLOAD_KIND);
-    let start_time = time::Instant::now();
+    let start_time = libax::time::Instant::now();
     for i in 0..PAYLOAD_KIND {
         let vec = data[i].clone();
         let data_len = TASK_PARAMS[i].data_len;
         let nice = TASK_PARAMS[i].nice;
         tasks.push(thread::spawn(move || {
-            #[cfg(feature = "axstd")]
-            ax_set_current_priority(nice).ok();
-
             let left = 0;
             let right = data_len;
+            thread::set_priority(nice);
             println!(
                 "part {}: {:?} [{}, {})",
                 i,
@@ -110,8 +103,7 @@ fn main() {
         println!("task {} = {}ms", i, time);
     }
 
-    #[cfg(feature = "axstd")]
-    if cfg!(feature = "sched_cfs") && option_env!("AX_SMP") == Some("1") {
+    if cfg!(feature = "sched_cfs") && option_env!("SMP") == Some("1") {
         assert!(
             leave_times[0] > leave_times[1]
                 && leave_times[1] > leave_times[2]

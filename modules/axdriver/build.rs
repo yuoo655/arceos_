@@ -1,5 +1,6 @@
-const NET_DEV_FEATURES: &[&str] = &["ixgbe", "virtio-net"];
-const BLOCK_DEV_FEATURES: &[&str] = &["ramdisk", "bcm2835-sdhci", "virtio-blk"];
+const PHY_DEV_FEATURES: &[&str] = &["cvitekphy"];
+const NET_DEV_FEATURES: &[&str] = &["cviteknic"];
+const BLOCK_DEV_FEATURES: &[&str] = &["ramdisk", "virtio-blk"];
 const DISPLAY_DEV_FEATURES: &[&str] = &["virtio-gpu"];
 
 fn has_feature(feature: &str) -> bool {
@@ -25,6 +26,7 @@ fn main() {
     // selected for each device category. If no device is selected, `dummy` is selected.
     let is_dyn = has_feature("dyn");
     for (dev_kind, feat_list) in [
+        ("phy",PHY_DEV_FEATURES),
         ("net", NET_DEV_FEATURES),
         ("block", BLOCK_DEV_FEATURES),
         ("display", DISPLAY_DEV_FEATURES),

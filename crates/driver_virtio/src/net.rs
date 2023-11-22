@@ -1,7 +1,9 @@
 use crate::as_dev_err;
 use alloc::{sync::Arc, vec::Vec};
 use driver_common::{BaseDriverOps, DevError, DevResult, DeviceType};
-use driver_net::{EthernetAddress, NetBuf, NetBufBox, NetBufPool, NetBufPtr, NetDriverOps};
+use driver_net::{
+    EthernetAddress, NetBuf, NetBufBox, NetBufPool, NetDriverOps, RxBuf, TxBuf, NetBufPtr,
+};
 use virtio_drivers::{device::net::VirtIONetRaw as InnerDev, transport::Transport, Hal};
 
 extern crate alloc;
@@ -142,20 +144,25 @@ impl<H: Hal, T: Transport, const QS: usize> NetDriverOps for VirtIoNetDev<H, T, 
         Ok(())
     }
 
-    fn transmit(&mut self, tx_buf: NetBufPtr) -> DevResult {
-        // 0. prepare tx buffer.
-        let tx_buf = unsafe { NetBuf::from_buf_ptr(tx_buf) };
-        // 1. transmit packet.
-        let token = unsafe {
-            self.inner
-                .transmit_begin(tx_buf.packet_with_header())
-                .map_err(as_dev_err)?
-        };
-        self.tx_buffers[token as usize] = Some(tx_buf);
-        Ok(())
+    fn transmit(&mut self, tx_buf: TxBuf) -> DevResult {
+        match tx_buf {
+            TxBuf::CvitekNic(_) => Err(DevError::Unsupported),
+            TxBuf::Virtio(tx_buf) => {
+            // 0. prepare tx buffer.
+            let tx_buf = unsafe { NetBuf::from_buf_ptr(tx_buf) };
+            // 1. transmit packet.
+            let token = unsafe {
+                self.inner
+                    .transmit_begin(tx_buf.packet_with_header())
+                    .map_err(as_dev_err)?
+            };
+            self.tx_buffers[token as usize] = Some(tx_buf);
+            Ok(())
+            }
+        }
     }
 
-    fn receive(&mut self) -> DevResult<NetBufPtr> {
+    fn receive(&mut self) -> DevResult<RxBuf> {
         if let Some(token) = self.inner.poll_receive() {
             let mut rx_buf = self.rx_buffers[token as usize]
                 .take()
@@ -169,13 +176,14 @@ impl<H: Hal, T: Transport, const QS: usize> NetDriverOps for VirtIoNetDev<H, T, 
             rx_buf.set_header_len(hdr_len);
             rx_buf.set_packet_len(pkt_len);
 
-            Ok(rx_buf.into_buf_ptr())
+            Ok(driver_net::RxBuf::Virtio(rx_buf.into_buf_ptr()))
         } else {
             Err(DevError::Again)
         }
     }
 
-    fn alloc_tx_buffer(&mut self, size: usize) -> DevResult<NetBufPtr> {
+    fn alloc_tx_buffer(&self, size: usize) -> DevResult<TxBuf> {
+        /*
         // 0. Allocate a buffer from the queue.
         let mut net_buf = self.free_tx_bufs.pop().ok_or(DevError::NoMemory)?;
         let pkt_len = size;
@@ -189,5 +197,15 @@ impl<H: Hal, T: Transport, const QS: usize> NetDriverOps for VirtIoNetDev<H, T, 
 
         // 2. Return the buffer.
         Ok(net_buf.into_buf_ptr())
+        */
+        Err(DevError::Unsupported)
+    }
+
+    fn prepare_tx_buffer(&self, tx_buf: &mut NetBuf, packet_len: usize) -> DevResult {
+        todo!()
+    }
+
+    fn fill_rx_buffers(&mut self, buf_pool: &NetBufPool) -> DevResult {
+        todo!()
     }
 }

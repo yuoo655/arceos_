@@ -136,8 +136,6 @@ pub struct TaskContext {
     pub kstack_top: VirtAddr,
     /// `RSP` after all callee-saved registers are pushed.
     pub rsp: u64,
-    /// Thread Local Storage (TLS).
-    pub fs_base: usize,
     /// Extended states, i.e., FP/SIMD states.
     #[cfg(feature = "fp_simd")]
     pub ext_state: ExtendedState,
@@ -149,7 +147,6 @@ impl TaskContext {
         Self {
             kstack_top: VirtAddr::from(0),
             rsp: 0,
-            fs_base: 0,
             #[cfg(feature = "fp_simd")]
             ext_state: ExtendedState::default(),
         }
@@ -157,7 +154,7 @@ impl TaskContext {
 
     /// Initializes the context for a new task, with the given entry point and
     /// kernel stack.
-    pub fn init(&mut self, entry: usize, kstack_top: VirtAddr, tls_area: VirtAddr) {
+    pub fn init(&mut self, entry: usize, kstack_top: VirtAddr) {
         unsafe {
             // x86_64 calling convention: the stack must be 16-byte aligned before
             // calling a function. That means when entering a new task (`ret` in `context_switch`
@@ -174,7 +171,6 @@ impl TaskContext {
             self.rsp = frame_ptr as u64;
         }
         self.kstack_top = kstack_top;
-        self.fs_base = tls_area.as_usize();
     }
 
     /// Switches to another task.
@@ -187,12 +183,10 @@ impl TaskContext {
             self.ext_state.save();
             next_ctx.ext_state.restore();
         }
-        #[cfg(feature = "tls")]
-        {
-            self.fs_base = super::read_thread_pointer();
-            unsafe { super::write_thread_pointer(next_ctx.fs_base) };
+        unsafe {
+            // TODO: swtich tls
+            context_switch(&mut self.rsp, &next_ctx.rsp)
         }
-        unsafe { context_switch(&mut self.rsp, &next_ctx.rsp) }
     }
 }
 

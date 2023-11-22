@@ -1,16 +1,21 @@
-use std::fs::{self, File, FileType};
-use std::io::{self, prelude::*};
-use std::{string::String, vec::Vec};
-
-#[cfg(all(not(feature = "axstd"), unix))]
-use std::os::unix::fs::{FileTypeExt, PermissionsExt};
+use libax::fs::{self, File};
+use libax::io::{self, prelude::*};
+use libax::{string::String, vec::Vec};
 
 macro_rules! print_err {
-    ($cmd: literal, $msg: expr) => {
+    ($cmd: literal, $msg: literal) => {
         println!("{}: {}", $cmd, $msg);
     };
-    ($cmd: literal, $arg: expr, $err: expr) => {
-        println!("{}: {}: {}", $cmd, $arg, $err);
+    ($cmd: literal, $err: ident) => {
+        use io::Error::*;
+        println!("{}: {}", $cmd, $err.as_str());
+    };
+    ($cmd: literal, $arg: expr, $err: ident) => {
+        use io::Error::*;
+        println!("{}: {}: {}", $cmd, $arg, $err.as_str());
+    };
+    ($cmd: literal, $arg: expr, $msg: expr) => {
+        println!("{}: {}: {}", $cmd, $arg, $msg);
     };
 }
 
@@ -29,47 +34,10 @@ const CMD_TABLE: &[(&str, CmdHandler)] = &[
     ("uname", do_uname),
 ];
 
-fn file_type_to_char(ty: FileType) -> char {
-    if ty.is_char_device() {
-        'c'
-    } else if ty.is_block_device() {
-        'b'
-    } else if ty.is_socket() {
-        's'
-    } else if ty.is_fifo() {
-        'p'
-    } else if ty.is_symlink() {
-        'l'
-    } else if ty.is_dir() {
-        'd'
-    } else if ty.is_file() {
-        '-'
-    } else {
-        '?'
-    }
-}
-
-#[rustfmt::skip]
-const fn file_perm_to_rwx(mode: u32) -> [u8; 9] {
-    let mut perm = [b'-'; 9];
-    macro_rules! set {
-        ($bit:literal, $rwx:literal) => {
-            if mode & (1 << $bit) != 0 {
-                perm[8 - $bit] = $rwx
-            }
-        };
-    }
-
-    set!(2, b'r'); set!(1, b'w'); set!(0, b'x');
-    set!(5, b'r'); set!(4, b'w'); set!(3, b'x');
-    set!(8, b'r'); set!(7, b'w'); set!(6, b'x');
-    perm
-}
-
 fn do_ls(args: &str) {
-    let current_dir = std::env::current_dir().unwrap();
+    let current_dir = libax::env::current_dir().unwrap();
     let args = if args.is_empty() {
-        path_to_str!(current_dir)
+        current_dir.as_str()
     } else {
         args
     };
@@ -79,8 +47,8 @@ fn do_ls(args: &str) {
         let metadata = fs::metadata(path)?;
         let size = metadata.len();
         let file_type = metadata.file_type();
-        let file_type_char = file_type_to_char(file_type);
-        let rwx = file_perm_to_rwx(metadata.permissions().mode());
+        let file_type_char = file_type.as_char();
+        let rwx = metadata.permissions().rwx_buf();
         let rwx = unsafe { core::str::from_utf8_unchecked(&rwx) };
         println!("{}{} {:>8} {}", file_type_char, rwx, size, entry);
         Ok(())
@@ -102,10 +70,9 @@ fn do_ls(args: &str) {
         entries.sort();
 
         for entry in entries {
-            let entry = path_to_str!(entry);
-            let path = String::from(name) + "/" + entry;
-            if let Err(e) = show_entry_info(&path, entry) {
-                print_err!("ls", path, e);
+            let path = String::from(name) + "/" + &entry;
+            if let Err(e) = show_entry_info(&path, &entry) {
+                print_err!("ls", path, e.as_str());
             }
         }
         Ok(())
@@ -116,7 +83,7 @@ fn do_ls(args: &str) {
             println!();
         }
         if let Err(e) = list_one(name, name_count > 1) {
-            print_err!("ls", name, e);
+            print_err!("ls", name, e.as_str());
         }
     }
 }
@@ -133,7 +100,7 @@ fn do_cat(args: &str) {
         loop {
             let n = file.read(&mut buf)?;
             if n > 0 {
-                io::stdout().write_all(&buf[..n])?;
+                io::stdout().write(&buf[..n])?;
             } else {
                 return Ok(());
             }
@@ -142,7 +109,7 @@ fn do_cat(args: &str) {
 
     for fname in args.split_whitespace() {
         if let Err(e) = cat_one(fname) {
-            print_err!("cat", fname, e);
+            print_err!("cat", fname, e.as_str());
         }
     }
 }
@@ -171,7 +138,7 @@ fn do_echo(args: &str) {
             "\n",
         ];
         if let Err(e) = echo_file(fname, &text_list) {
-            print_err!("echo", fname, e);
+            print_err!("echo", fname, e.as_str());
         }
     } else {
         println!("{}", args)
@@ -190,7 +157,11 @@ fn do_mkdir(args: &str) {
 
     for path in args.split_whitespace() {
         if let Err(e) = mkdir_one(path) {
-            print_err!("mkdir", format_args!("cannot create directory '{path}'"), e);
+            print_err!(
+                "mkdir",
+                format_args!("cannot create directory '{path}'"),
+                e.as_str()
+            );
         }
     }
 }
@@ -220,7 +191,7 @@ fn do_rm(args: &str) {
             continue;
         }
         if let Err(e) = rm_one(path, rm_dir) {
-            print_err!("rm", format_args!("cannot remove '{path}'"), e);
+            print_err!("rm", format_args!("cannot remove '{path}'"), e.as_str());
         }
     }
 }
@@ -230,8 +201,8 @@ fn do_cd(mut args: &str) {
         args = "/";
     }
     if !args.contains(char::is_whitespace) {
-        if let Err(e) = std::env::set_current_dir(args) {
-            print_err!("cd", args, e);
+        if let Err(e) = libax::env::set_current_dir(args) {
+            print_err!("cd", args, e.as_str());
         }
     } else {
         print_err!("cd", "too many arguments");
@@ -239,14 +210,14 @@ fn do_cd(mut args: &str) {
 }
 
 fn do_pwd(_args: &str) {
-    let pwd = std::env::current_dir().unwrap();
-    println!("{}", path_to_str!(pwd));
+    let pwd = libax::env::current_dir().unwrap();
+    println!("{}", pwd);
 }
 
 fn do_uname(_args: &str) {
-    let arch = option_env!("AX_ARCH").unwrap_or("");
-    let platform = option_env!("AX_PLATFORM").unwrap_or("");
-    let smp = match option_env!("AX_SMP") {
+    let arch = option_env!("ARCH").unwrap_or("");
+    let platform = option_env!("PLATFORM").unwrap_or("");
+    let smp = match option_env!("SMP") {
         None | Some("1") => "",
         _ => " SMP",
     };
@@ -268,8 +239,7 @@ fn do_help(_args: &str) {
 }
 
 fn do_exit(_args: &str) {
-    println!("Bye~");
-    std::process::exit(0);
+    libax::thread::exit(0);
 }
 
 pub fn run_cmd(line: &[u8]) {

@@ -1,0 +1,13 @@
+[package]
+name = "cvitek_nic_test"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["libax/default"]
+
+[dependencies]
+libax = { path = "../../../ulib/libax", default-features = false, features = ["paging", "multitask", "cviteknic","cvitekphy","irq"] }
+

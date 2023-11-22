@@ -10,6 +10,14 @@ macro_rules! register_net_driver {
     };
 }
 
+macro_rules! register_phy_driver {
+    ($driver_type:ty, $device_type:ty) => {
+        /// The unified type of the PHY devices.
+        #[cfg(not(feature = "dyn"))]
+        pub type AxPhyDevice =$device_type;
+    };
+}
+
 macro_rules! register_block_driver {
     ($driver_type:ty, $device_type:ty) => {
         /// The unified type of the NIC devices.
@@ -54,14 +62,14 @@ macro_rules! for_each_drivers {
             type $drv_type = crate::drivers::RamDiskDriver;
             $code
         }
-        #[cfg(block_dev = "bcm2835-sdhci")]
+        #[cfg(net_dev = "cviteknic")]
         {
-            type $drv_type = crate::drivers::BcmSdhciDriver;
+            type $drv_type = crate::drivers::CvitekNicDriver;
             $code
         }
-        #[cfg(net_dev = "ixgbe")]
+        #[cfg(phy_dev = "cvitekphy")]
         {
-            type $drv_type = crate::drivers::IxgbeDriver;
+            type $drv_type = crate::drivers::CvitekPhyDriver;
             $code
         }
     }};

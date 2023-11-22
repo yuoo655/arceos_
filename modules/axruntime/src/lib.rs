@@ -108,21 +108,19 @@ pub extern "C" fn rust_main(cpu_id: usize, dtb: usize) -> ! {
         "\
         arch = {}\n\
         platform = {}\n\
-        target = {}\n\
         smp = {}\n\
         build_mode = {}\n\
         log_level = {}\n\
         ",
-        option_env!("AX_ARCH").unwrap_or(""),
-        option_env!("AX_PLATFORM").unwrap_or(""),
-        option_env!("AX_TARGET").unwrap_or(""),
-        option_env!("AX_SMP").unwrap_or(""),
-        option_env!("AX_MODE").unwrap_or(""),
-        option_env!("AX_LOG").unwrap_or(""),
+        option_env!("ARCH").unwrap_or(""),
+        option_env!("PLATFORM").unwrap_or(""),
+        option_env!("SMP").unwrap_or(""),
+        option_env!("MODE").unwrap_or(""),
+        option_env!("LOG").unwrap_or(""),
     );
 
     axlog::init();
-    axlog::set_max_level(option_env!("AX_LOG").unwrap_or("")); // no effect if set `log-level-*` features
+    axlog::set_max_level(option_env!("LOG").unwrap_or("")); // no effect if set `log-level-*` features
     info!("Logging is enabled.");
     info!("Primary CPU {} started, dtb = {:#x}.", cpu_id, dtb);
 
@@ -138,7 +136,10 @@ pub extern "C" fn rust_main(cpu_id: usize, dtb: usize) -> ! {
     }
 
     #[cfg(feature = "alloc")]
-    init_allocator();
+    {
+        info!("Initialize global memory allocator...");
+        init_allocator();
+    }
 
     #[cfg(feature = "paging")]
     {
@@ -152,6 +153,12 @@ pub extern "C" fn rust_main(cpu_id: usize, dtb: usize) -> ! {
     #[cfg(feature = "multitask")]
     axtask::init_scheduler();
 
+    #[cfg(feature = "irq")]
+    {
+        info!("Initialize interrupt handlers...");
+        init_interrupt();
+    }
+
     #[cfg(any(feature = "fs", feature = "net", feature = "display"))]
     {
         #[allow(unused_variables)]
@@ -161,7 +168,7 @@ pub extern "C" fn rust_main(cpu_id: usize, dtb: usize) -> ! {
         axfs::init_filesystems(all_devices.block);
 
         #[cfg(feature = "net")]
-        axnet::init_network(all_devices.net);
+        axnet::init_network(all_devices.net,all_devices.phy);
 
         #[cfg(feature = "display")]
         axdisplay::init_display(all_devices.display);
@@ -170,19 +177,9 @@ pub extern "C" fn rust_main(cpu_id: usize, dtb: usize) -> ! {
     #[cfg(feature = "smp")]
     self::mp::start_secondary_cpus(cpu_id);
 
-    #[cfg(feature = "irq")]
-    {
-        info!("Initialize interrupt handlers...");
-        init_interrupt();
-    }
-
-    #[cfg(all(feature = "tls", not(feature = "multitask")))]
-    {
-        info!("Initialize thread local storage...");
-        init_tls();
-    }
-
     info!("Primary CPU {} init OK.", cpu_id);
+    // 因为发现下面的原子变量的fetch_add操作在华山派开发板上不支持，故目前的解决思路是注释掉与这个原子操作相关的代码段
+    // https://rustwiki.org/zh-CN/std/sync/atomic/struct.AtomicUsize.html#method.fetch_add
     INITED_CPUS.fetch_add(1, Ordering::Relaxed);
 
     while !is_init_ok() {
@@ -203,9 +200,6 @@ pub extern "C" fn rust_main(cpu_id: usize, dtb: usize) -> ! {
 #[cfg(feature = "alloc")]
 fn init_allocator() {
     use axhal::mem::{memory_regions, phys_to_virt, MemRegionFlags};
-
-    info!("Initialize global memory allocator...");
-    info!("  use {} allocator.", axalloc::global_allocator().name());
 
     let mut max_region_size = 0;
     let mut max_region_paddr = 0.into();
@@ -231,15 +225,17 @@ fn init_allocator() {
 
 #[cfg(feature = "paging")]
 fn remap_kernel_memory() -> Result<(), axhal::paging::PagingError> {
-    use axhal::mem::{memory_regions, phys_to_virt};
-    use axhal::paging::PageTable;
+    use axhal::mem::{memory_regions, phys_to_virt, MemRegion};
+    use axhal::paging::{PageTable, PTEFlags};
     use lazy_init::LazyInit;
-
+    use axhal::paging::MappingFlags;
     static KERNEL_PAGE_TABLE: LazyInit<PageTable> = LazyInit::new();
 
     if axhal::cpu::this_cpu_is_bsp() {
         let mut kernel_page_table = PageTable::try_new()?;
+        let mut x : MemRegion;
         for r in memory_regions() {
+            x = r.clone();
             kernel_page_table.map_region(
                 phys_to_virt(r.paddr),
                 r.paddr,
@@ -247,6 +243,21 @@ fn remap_kernel_memory() -> Result<(), axhal::paging::PagingError> {
                 r.flags.into(),
                 true,
             )?;
+            // ==== PTE flags debugging =====
+            // if x.paddr.as_usize() == 0x0300_0000_usize {
+            //     // x = r;
+            //     let flg = PTEFlags::from(MappingFlags::from(x.flags)) | PTEFlags::A | PTEFlags::D;
+            //     kernel_page_table.update(
+            //         (0xffff_ffc0_0000_0000usize+0x3050120).into(), 
+            //         None, 
+            //         // Some(((flg & !PTEFlags::W) & !PTEFlags::X).into())
+            //         // Some((flg  & !PTEFlags::DV).into())
+            //         Some((flg  | PTEFlags::V).into())
+            //     );
+            //     let t = kernel_page_table.query((0xffff_ffc0_0000_0000usize+0x3050120).into());
+            //     info!("=============update pte flags for 0x3050120 complete==============");
+            //     info!("=============t: {:?}==============", t);
+            // }
         }
         KERNEL_PAGE_TABLE.init_by(kernel_page_table);
     }
@@ -285,11 +296,4 @@ fn init_interrupt() {
 
     // Enable IRQs before starting app
     axhal::arch::enable_irqs();
-}
-
-#[cfg(all(feature = "tls", not(feature = "multitask")))]
-fn init_tls() {
-    let main_tls = axhal::tls::TlsArea::alloc();
-    unsafe { axhal::arch::write_thread_pointer(main_tls.tls_ptr() as usize) };
-    core::mem::forget(main_tls);
 }

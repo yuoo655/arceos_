@@ -6,63 +6,48 @@ ENTRY(_start)
 SECTIONS
 {
     . = BASE_ADDRESS;
-    _skernel = .;
+    skernel = .;
 
     .text : ALIGN(4K) {
-        _stext = .;
+        stext = .;
         *(.text.boot)
         *(.text .text.*)
         . = ALIGN(4K);
-        _etext = .;
+        etext = .;
     }
 
     .rodata : ALIGN(4K) {
-        _srodata = .;
+        srodata = .;
         *(.rodata .rodata.*)
         *(.srodata .srodata.*)
         *(.sdata2 .sdata2.*)
         . = ALIGN(4K);
-        _erodata = .;
+        erodata = .;
     }
 
     .data : ALIGN(4K) {
-        _sdata = .;
+        sdata = .;
         *(.data.boot_page_table)
         . = ALIGN(4K);
         *(.data .data.*)
         *(.sdata .sdata.*)
         *(.got .got.*)
+        . = ALIGN(4K);
+        edata = .;
     }
 
-    .tdata : ALIGN(0x10) {
-        _stdata = .;
-        *(.tdata .tdata.*)
-        _etdata = .;
-    }
-
-    .tbss : ALIGN(0x10) {
-        _stbss = .;
-        *(.tbss .tbss.*)
-        *(.tcommon)
-        _etbss = .;
-    }
-
-    . = ALIGN(4K);
-    _percpu_start = .;
-    .percpu 0x0 : AT(_percpu_start) {
-        _percpu_load_start = .;
+    percpu_start = .;
+    .percpu 0x0 : AT(percpu_start) ALIGN(4K) {
+        __percpu_offset_start = .;
         *(.percpu .percpu.*)
-        _percpu_load_end = .;
-        . = ALIGN(64);
-        _percpu_size_aligned = .;
+        __percpu_offset_end = .;
+        . = ALIGN(4K);
+        __percpu_size_aligned = .;
 
-        . = _percpu_load_start + _percpu_size_aligned * %SMP%;
+        . = __percpu_offset_start + __percpu_size_aligned * %SMP%;
     }
-    . = _percpu_start + SIZEOF(.percpu);
-    _percpu_end = .;
-
-    . = ALIGN(4K);
-    _edata = .;
+    . = percpu_start + SIZEOF(.percpu);
+    percpu_end = .;
 
     .bss : ALIGN(4K) {
         boot_stack = .;
@@ -70,15 +55,15 @@ SECTIONS
         . = ALIGN(4K);
         boot_stack_top = .;
 
-        _sbss = .;
+        sbss = .;
         *(.bss .bss.*)
         *(.sbss .sbss.*)
         *(COMMON)
         . = ALIGN(4K);
-        _ebss = .;
+        ebss = .;
     }
 
-    _ekernel = .;
+    ekernel = .;
 
 	/DISCARD/ : {
         *(.comment) *(.gnu*) *(.note*) *(.eh_frame*)

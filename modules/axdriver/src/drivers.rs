@@ -4,6 +4,7 @@
 
 use crate::AxDeviceEnum;
 use driver_common::DeviceType;
+use driver_net::CvitekNicTraits;
 
 #[cfg(feature = "virtio")]
 use crate::virtio::{self, VirtIoDevMeta};
@@ -68,62 +69,31 @@ cfg_if::cfg_if! {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(block_dev = "bcm2835-sdhci")]{
-        pub struct BcmSdhciDriver;
-        register_block_driver!(MmckDriver, driver_block::bcm2835sdhci::SDHCIDriver);
+    if #[cfg(net_dev = "cviteknic")] {
+        use super::CvitekNicTraitsImpl;
+        pub struct CvitekNicDriver;
+        register_net_driver!(CvitekNicDriver, driver_net::cviteknic::CvitekNic<CvitekNicTraitsImpl>);
 
-        impl DriverProbe for BcmSdhciDriver {
+        impl DriverProbe for CvitekNicDriver {
             fn probe_global() -> Option<AxDeviceEnum> {
-                debug!("mmc probe");
-                driver_block::bcm2835sdhci::SDHCIDriver::try_new().ok().map(AxDeviceEnum::from_block)
+                use driver_net::cviteknic::CvitekNic;
+                let cvitek_nic = CvitekNic::init(CvitekNicTraitsImpl);
+                return Some(AxDeviceEnum::from_net(cvitek_nic));
             }
         }
     }
 }
-
 cfg_if::cfg_if! {
-    if #[cfg(net_dev = "ixgbe")] {
-        use crate::ixgbe::IxgbeHalImpl;
-        use axhal::mem::phys_to_virt;
-        pub struct IxgbeDriver;
-        register_net_driver!(IxgbeDriver, driver_net::ixgbe::IxgbeNic<IxgbeHalImpl, 1024, 1>);
-        impl DriverProbe for IxgbeDriver {
-            fn probe_pci(
-                    root: &mut driver_pci::PciRoot,
-                    bdf: driver_pci::DeviceFunction,
-                    dev_info: &driver_pci::DeviceFunctionInfo,
-                ) -> Option<crate::AxDeviceEnum> {
-                    use crate::ixgbe::IxgbeHalImpl;
-                    use driver_net::ixgbe::{INTEL_82599, INTEL_VEND, IxgbeNic};
-                    if dev_info.vendor_id == INTEL_VEND && dev_info.device_id == INTEL_82599 {
-                        // Intel 10Gb Network
-                        info!("ixgbe PCI device found at {:?}", bdf);
+    if #[cfg(phy_dev = "cvitekphy")] {
+        use super::CvitekPhyTraitsImpl;
+        pub struct CvitekPhyDriver;
+        register_phy_driver!(CvitekPhyDriver, driver_net::cvitekphy::CvitekPhy<CvitekPhyTraitsImpl>);
 
-                        // Initialize the device
-                        // These can be changed according to the requirments specified in the ixgbe init function.
-                        const QN: u16 = 1;
-                        const QS: usize = 1024;
-                        let bar_info = root.bar_info(bdf, 0).unwrap();
-                        match bar_info {
-                            driver_pci::BarInfo::Memory {
-                                address,
-                                size,
-                                ..
-                            } => {
-                                let ixgbe_nic = IxgbeNic::<IxgbeHalImpl, QS, QN>::init(
-                                    phys_to_virt((address as usize).into()).into(),
-                                    size as usize
-                                )
-                                .expect("failed to initialize ixgbe device");
-                                return Some(AxDeviceEnum::from_net(ixgbe_nic));
-                            }
-                            driver_pci::BarInfo::IO { .. } => {
-                                error!("ixgbe: BAR0 is of I/O type");
-                                return None;
-                            }
-                        }
-                    }
-                    None
+        impl DriverProbe for CvitekPhyDriver {
+            fn probe_global() -> Option<AxDeviceEnum> {
+                use driver_net::cvitekphy::CvitekPhy;
+                let cvitek_phy = CvitekPhy::init(CvitekPhyTraitsImpl);
+                return Some(AxDeviceEnum::from_phy(cvitek_phy));
             }
         }
     }

@@ -84,8 +84,6 @@ pub struct TaskContext {
     pub s9: usize,
     pub s10: usize,
     pub s11: usize,
-
-    pub tp: usize,
     // TODO: FP states
 }
 
@@ -97,10 +95,9 @@ impl TaskContext {
 
     /// Initializes the context for a new task, with the given entry point and
     /// kernel stack.
-    pub fn init(&mut self, entry: usize, kstack_top: VirtAddr, tls_area: VirtAddr) {
+    pub fn init(&mut self, entry: usize, kstack_top: VirtAddr) {
         self.sp = kstack_top.as_usize();
         self.ra = entry;
-        self.tp = tls_area.as_usize();
     }
 
     /// Switches to another task.
@@ -108,13 +105,8 @@ impl TaskContext {
     /// It first saves the current task's context from CPU to this place, and then
     /// restores the next task's context from `next_ctx` to CPU.
     pub fn switch_to(&mut self, next_ctx: &Self) {
-        #[cfg(feature = "tls")]
-        {
-            self.tp = super::read_thread_pointer();
-            unsafe { super::write_thread_pointer(next_ctx.tp) };
-        }
         unsafe {
-            // TODO: switch FP states
+            // TODO: switch TLS
             context_switch(self, next_ctx)
         }
     }

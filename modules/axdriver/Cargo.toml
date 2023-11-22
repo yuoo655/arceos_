@@ -2,7 +2,7 @@
 name = "axdriver"
 version = "0.1.0"
 edition = "2021"
-authors = ["Yuekai Jia <equation618@gmail.com>", "ChengXiang Qi <kuangjux@outlook.com>"]
+authors = ["Yuekai Jia <equation618@gmail.com>"]
 description = "ArceOS device drivers"
 license = "GPL-3.0-or-later OR Apache-2.0"
 homepage = "https://github.com/rcore-os/arceos"
@@ -14,6 +14,7 @@ dyn = []
 bus-mmio = []
 bus-pci = ["dep:driver_pci", "dep:axhal", "dep:axconfig"]
 net = ["driver_net"]
+phy = ["driver_net"]
 block = ["driver_block"]
 display = ["driver_display"]
 
@@ -25,8 +26,8 @@ virtio-blk = ["block", "virtio", "driver_virtio/block"]
 virtio-net = ["net", "virtio", "driver_virtio/net"]
 virtio-gpu = ["display", "virtio", "driver_virtio/gpu"]
 ramdisk = ["block", "driver_block/ramdisk"]
-bcm2835-sdhci = ["block", "driver_block/bcm2835-sdhci"]
-ixgbe = ["net", "driver_net/ixgbe", "dep:axalloc", "dep:axhal"]
+cviteknic = ["net", "driver_net/cviteknic"]
+cvitekphy = ["net","driver_net/cvitekphy"]
 # more devices example: e1000 = ["net", "driver_net/e1000"]
 
 default = ["bus-mmio"]

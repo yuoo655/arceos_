@@ -71,12 +71,19 @@ mod bus;
 mod drivers;
 mod dummy;
 mod structs;
+mod dma_remap;
+pub use dma_remap::dma_hs_remap_init;
 
 #[cfg(feature = "virtio")]
 mod virtio;
 
-#[cfg(feature = "ixgbe")]
-mod ixgbe;
+#[cfg(feature = "cviteknic")]
+mod cvitek_traits;
+#[cfg(feature = "cviteknic")]
+pub use cvitek_traits::CvitekNicTraitsImpl;
+
+#[cfg(feature = "cvitekphy")]
+pub use cvitek_traits::CvitekPhyTraitsImpl;
 
 pub mod prelude;
 
@@ -90,6 +97,8 @@ pub use self::structs::AxBlockDevice;
 pub use self::structs::AxDisplayDevice;
 #[cfg(feature = "net")]
 pub use self::structs::AxNetDevice;
+#[cfg(feature = "phy")]
+pub use self::structs::AxPhyDevice;
 
 /// A structure that contains all device drivers, organized by their category.
 #[derive(Default)]
@@ -97,6 +106,8 @@ pub struct AllDevices {
     /// All network device drivers.
     #[cfg(feature = "net")]
     pub net: AxDeviceContainer<AxNetDevice>,
+    #[cfg(feature = "phy")]
+    pub phy: AxDeviceContainer<AxPhyDevice>,
     /// All block device drivers.
     #[cfg(feature = "block")]
     pub block: AxDeviceContainer<AxBlockDevice>,
@@ -119,6 +130,7 @@ impl AllDevices {
 
     /// Probes all supported devices.
     fn probe(&mut self) {
+        dma_hs_remap_init();
         for_each_drivers!(type Driver, {
             if let Some(dev) = Driver::probe_global() {
                 info!(
@@ -139,6 +151,8 @@ impl AllDevices {
         match dev {
             #[cfg(feature = "net")]
             AxDeviceEnum::Net(dev) => self.net.push(dev),
+            #[cfg(feature = "phy")]
+            AxDeviceEnum::Phy(dev) =>self.phy.push(dev),
             #[cfg(feature = "block")]
             AxDeviceEnum::Block(dev) => self.block.push(dev),
             #[cfg(feature = "display")]
@@ -161,6 +175,14 @@ pub fn init_drivers() -> AllDevices {
         for (i, dev) in all_devs.net.iter().enumerate() {
             assert_eq!(dev.device_type(), DeviceType::Net);
             debug!("  NIC {}: {:?}", i, dev.device_name());
+        }
+    }
+    #[cfg(feature = "phy")]
+    {
+        debug!("number of Phys: {}", all_devs.phy.len());
+        for (i, dev) in all_devs.phy.iter().enumerate() {
+            assert_eq!(dev.device_type(), DeviceType::Phy);
+            debug!("  PHY {}: {:?}", i, dev.device_name());
         }
     }
     #[cfg(feature = "block")]

@@ -1,0 +1,42 @@
+感谢刘逸珑大佬的倾情支持以及张轩铬大神的帮忙
+
+使用的分支是cvitek-nic-phy-dev
+基于张轩铬大佬的cvitek-nic分支进一步开发的
+命令如下
+如果是wsl2，则需要用usbipd
+windows下安装usbipd
+
+然后
+usbipd wsl list
+找到对应的usb口号xxx
+usbipd wsl attach --busid xxx
+
+进入wsl
+一般是/dev/ttyUSB0
+
+编译arceos
+make A=apps/net/cvitek_nic_test ARCH=riscv64 SMP=1 NET=y LOG=info cv1811
+
+在wsl下
+sudo apt-get install ckermit	#安装ckermit
+kermit
+		#进入kermit
+set line /dev/ttyACM1
+set speed 115200
+set carrier-watch off
+set handshake     none
+set flow-control none
+robust
+set file type     bin
+set file name     lit
+set rec pack      1000
+set send pack     1000
+set window        5
+c	#打开串口
+#下电，然后重启，一直摁ctrl c，知道进入uboot
+loadb 0x82000000
+ctrl+\+c	#返回kermit shell
+send /home/susan/arceos_hsp/cv1811h/arceos-cv1811.itb
+结束后
+c
+bootm 0x82000000

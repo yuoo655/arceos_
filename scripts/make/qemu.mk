@@ -26,32 +26,16 @@ qemu_args-aarch64 := \
 
 qemu_args-y := -m 128M -smp $(SMP) $(qemu_args-$(ARCH))
 
-qemu_args-$(BLK) += \
+qemu_args-$(FS) += \
   -device virtio-blk-$(vdev-suffix),drive=disk0 \
   -drive id=disk0,if=none,format=raw,file=$(DISK_IMG)
 
 qemu_args-$(NET) += \
-  -device virtio-net-$(vdev-suffix),netdev=net0
-
-ifeq ($(NET_DEV), user)
-  qemu_args-$(NET) += -netdev user,id=net0,hostfwd=tcp::5555-:5555,hostfwd=udp::5555-:5555
-else ifeq ($(NET_DEV), tap)
-  qemu_args-$(NET) += -netdev tap,id=net0,script=scripts/net/qemu-ifup.sh,downscript=no,vhost=$(VHOST),vhostforce=$(VHOST)
-  QEMU := sudo $(QEMU)
-else ifeq ($(NET_DEV), bridge)
-  qemu_args-$(NET) += -netdev bridge,id=net0,br=virbr0
-  QEMU := sudo $(QEMU)
-else
-  $(error "NET_DEV" must be one of "user", "tap", or "bridge")
-endif
-
-ifneq ($(VFIO_PCI),)
-  qemu_args-y += --device vfio-pci,host=$(VFIO_PCI)
-  QEMU := sudo $(QEMU)
-endif
+  -device virtio-net-$(vdev-suffix),netdev=net0 \
+  -netdev user,id=net0,hostfwd=tcp::5555-:5555,hostfwd=udp::5555-:5555
 
 ifeq ($(NET_DUMP), y)
-  qemu_args-$(NET) += -object filter-dump,id=dump0,netdev=net0,file=netdump.pcap
+  qemu_args-$(NET) += -object filter-dump,id=dump0,netdev=net0,file=qemu-net0.pcap
 endif
 
 qemu_args-$(GRAPHIC) += \

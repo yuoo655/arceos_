@@ -6,6 +6,8 @@ use alloc::{boxed::Box, vec, vec::Vec};
 /// The unified type of the NIC devices.
 #[cfg(feature = "net")]
 pub type AxNetDevice = Box<dyn NetDriverOps>;
+#[cfg(feature = "phy")]
+pub type AxPhyDevice = Box<dyn PhyDriverOps>;
 /// The unified type of the block storage devices.
 #[cfg(feature = "block")]
 pub type AxBlockDevice = Box<dyn BlockDriverOps>;
@@ -19,7 +21,10 @@ impl super::AxDeviceEnum {
     pub fn from_net(dev: impl NetDriverOps + 'static) -> Self {
         Self::Net(Box::new(dev))
     }
-
+    #[cfg(feature = "phy")]
+    pub fn from_phy(dev: impl PhyDriverOps + 'static) -> Self {
+        Self::Phy(Box::new(dev))
+    }
     /// Constructs a block device.
     #[cfg(feature = "block")]
     pub fn from_block(dev: impl BlockDriverOps + 'static) -> Self {

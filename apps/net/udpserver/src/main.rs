@@ -1,19 +1,21 @@
-#![cfg_attr(feature = "axstd", no_std)]
-#![cfg_attr(feature = "axstd", no_main)]
+#![no_std]
+#![no_main]
 
 #[macro_use]
-#[cfg(feature = "axstd")]
-extern crate axstd as std;
+extern crate libax;
+extern crate alloc;
 
-use std::io;
-use std::net::{ToSocketAddrs, UdpSocket};
+use core::str::FromStr;
+
+use libax::io;
+use libax::net::{IpAddr, UdpSocket};
 
 const LOCAL_IP: &str = "0.0.0.0";
 const LOCAL_PORT: u16 = 5555;
 
-fn receive_loop() -> io::Result<()> {
-    let addr = (LOCAL_IP, LOCAL_PORT).to_socket_addrs()?.next().unwrap();
-    let socket = UdpSocket::bind(addr)?;
+fn receive_loop() -> io::Result {
+    let (addr, port) = (IpAddr::from_str(LOCAL_IP).unwrap(), LOCAL_PORT);
+    let socket = UdpSocket::bind((addr, port).into())?;
     println!("listen on: {}", socket.local_addr().unwrap());
     let mut buf = [0u8; 1024];
     loop {
@@ -31,7 +33,7 @@ fn receive_loop() -> io::Result<()> {
     }
 }
 
-#[cfg_attr(feature = "axstd", no_mangle)]
+#[no_mangle]
 fn main() {
     println!("Hello, simple udp client!");
     receive_loop().expect("test udp client failed");

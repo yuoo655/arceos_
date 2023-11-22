@@ -3,18 +3,26 @@
 #![no_std]
 #![feature(const_mut_refs)]
 #![feature(const_slice_from_raw_parts_mut)]
-#![feature(box_into_inner)]
 
-#[cfg(feature = "ixgbe")]
-/// ixgbe NIC device driver.
-pub mod ixgbe;
 mod net_buf;
 
 use core::ptr::NonNull;
 
+#[cfg(feature = "cviteknic")]
+pub mod cviteknic;
+#[cfg(feature = "cvitekphy")]
+pub mod cvitekphy;
+
+#[macro_use]
+extern crate log;
+extern crate alloc;
+pub use cvitek_nic::{CvitekNicDevice, CvitekNicTraits, Packet, RxBuffer, TxBuffer};
+pub use cvitek_phy::{CvitekPhyDevice, CvitekPhyTraits};
+
 #[doc(no_inline)]
 pub use driver_common::{BaseDriverOps, DevError, DevResult, DeviceType};
 
+// pub use cvitek::CvitekNicTraits;
 pub use self::net_buf::{NetBuf, NetBufBox, NetBufPool};
 
 /// The ethernet address of the NIC (MAC address).
@@ -37,6 +45,16 @@ pub trait NetDriverOps: BaseDriverOps {
     /// Size of the transmit queue.
     fn tx_queue_size(&self) -> usize;
 
+    /// Fills the receive queue with buffers.
+    ///
+    /// It should be called once when the driver is initialized.
+    fn fill_rx_buffers(&mut self, buf_pool: &NetBufPool) -> DevResult;
+
+    /// Prepares a buffer for transmitting.
+    ///
+    /// e.g., fill the header of the packet.
+    fn prepare_tx_buffer(&self, tx_buf: &mut NetBuf, packet_len: usize) -> DevResult;
+
     /// Gives back the `rx_buf` to the receive queue for later receiving.
     ///
     /// `rx_buf` should be the same as the one returned by
@@ -49,7 +67,7 @@ pub trait NetDriverOps: BaseDriverOps {
 
     /// Transmits a packet in the buffer to the network, without blocking,
     /// returns [`DevResult`].
-    fn transmit(&mut self, tx_buf: NetBufPtr) -> DevResult;
+    fn transmit(&mut self, tx_buf: TxBuf) -> DevResult;
 
     /// Receives a packet from the network and store it in the [`NetBuf`],
     /// returns the buffer.
@@ -59,11 +77,61 @@ pub trait NetDriverOps: BaseDriverOps {
     ///
     /// If currently no incomming packets, returns an error with type
     /// [`DevError::Again`].
-    fn receive(&mut self) -> DevResult<NetBufPtr>;
+    fn receive(&mut self) -> DevResult<RxBuf>;
 
     /// Allocate a memory buffer of a specified size for network transmission,
     /// returns [`DevResult`]
-    fn alloc_tx_buffer(&mut self, size: usize) -> DevResult<NetBufPtr>;
+    fn alloc_tx_buffer(&self, size: usize) -> DevResult<TxBuf>;
+}
+
+pub trait PhyDriverOps: BaseDriverOps{
+    /// configure phy register
+    fn configure(&self);
+    /// start phy transmit
+    fn start(&self);
+    /// stop phy transmit
+    fn stop(&self);
+}
+pub enum TxBuf {
+    CvitekNic(TxBuffer),
+    Virtio(NetBufPtr),
+}
+
+impl TxBuf {
+    pub fn packet(&self) -> &[u8] {
+        match self {
+            Self::CvitekNic(tx_buf) => tx_buf.packet(),
+            Self::Virtio(tx_buf) => tx_buf.packet(),
+        }
+    }
+
+    pub fn packet_mut(&mut self) -> &mut [u8] {
+        match self {
+            Self::CvitekNic(tx_buf) => tx_buf.packet_mut(),
+            Self::Virtio(tx_buf) => tx_buf.packet_mut(),
+        }
+    }
+}
+
+pub enum RxBuf {
+    CvitekNic(RxBuffer),
+    Virtio(NetBufPtr),
+}
+
+impl RxBuf {
+    pub fn packet(&self) -> &[u8] {
+        match self {
+            Self::CvitekNic(rx_buf) => rx_buf.packet(),
+            Self::Virtio(rx_buf) => rx_buf.packet(),
+        }
+    }
+
+    pub fn packet_mut(&mut self) -> &mut [u8] {
+        match self {
+            Self::CvitekNic(rx_buf) => rx_buf.packet_mut(),
+            Self::Virtio(rx_buf) => rx_buf.packet_mut(),
+        }
+    }
 }
 
 /// A raw buffer struct for network device.

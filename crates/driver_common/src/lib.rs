@@ -25,6 +25,7 @@ pub enum DeviceType {
     Char,
     /// Network device (e.g., ethernet card).
     Net,
+    Phy,
     /// Graphic display device (e.g., GPU)
     Display,
 }

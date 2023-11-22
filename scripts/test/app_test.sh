@@ -113,7 +113,6 @@ if [ -z "$1" ]; then
         "apps/task/parallel"
         "apps/task/sleep"
         "apps/task/priority"
-        "apps/task/tls"
         "apps/net/httpclient"
         "apps/c/helloworld"
         "apps/c/memtest"

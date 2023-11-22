@@ -92,33 +92,27 @@ impl Metadata {
 
     /// Returns the size of the file, in bytes, this metadata is for.
     #[allow(clippy::len_without_is_empty)]
-    pub const fn len(&self) -> u64 {
+    pub fn len(&self) -> u64 {
         self.0.size()
     }
 
     /// Returns the permissions of the file this metadata is for.
-    pub const fn permissions(&self) -> Permissions {
+    pub fn permissions(&self) -> Permissions {
         self.0.perm()
     }
 
-    /// Returns the total size of this file in bytes.
-    pub const fn size(&self) -> u64 {
-        self.0.size()
-    }
-
-    /// Returns the number of blocks allocated to the file, in 512-byte units.
-    pub const fn blocks(&self) -> u64 {
-        self.0.blocks()
+    /// Returns the inner raw metadata [`fops::FileAttr`].
+    pub const fn raw_metadata(&self) -> &fops::FileAttr {
+        &self.0
     }
 }
 
 impl fmt::Debug for Metadata {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Metadata")
-            .field("file_type", &self.file_type())
-            .field("is_dir", &self.is_dir())
-            .field("is_file", &self.is_file())
-            .field("permissions", &self.permissions())
+            .field("file_type", &self.0.file_type())
+            .field("is_dir", &self.0.is_dir())
+            .field("is_file", &self.0.is_file())
             .finish_non_exhaustive()
     }
 }

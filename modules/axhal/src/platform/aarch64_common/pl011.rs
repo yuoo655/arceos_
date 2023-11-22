@@ -36,7 +36,7 @@ pub fn init_early() {
 /// Set UART IRQ Enable
 pub fn init() {
     #[cfg(feature = "irq")]
-    crate::irq::set_enable(crate::platform::irq::UART_IRQ_NUM, true);
+    crate::platform::irq::set_enable(axconfig::UART_IRQ_NUM, true);
 }
 
 /// UART IRQ Handler

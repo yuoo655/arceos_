@@ -1,12 +1,11 @@
-#![cfg_attr(feature = "axstd", no_std)]
-#![cfg_attr(feature = "axstd", no_main)]
+#![no_std]
+#![no_main]
 
-#[cfg(feature = "axstd")]
-extern crate axstd as std;
-
+extern crate libax;
 mod display;
 
-use self::display::Display;
+use display::*;
+
 use embedded_graphics::{
     mono_font::{ascii::FONT_10X20, MonoTextStyle},
     pixelcolor::Rgb888,
@@ -67,17 +66,18 @@ impl DrawingBoard {
     }
 }
 
-fn test_gpu() {
+fn test_gpu() -> i32 {
     let mut board = DrawingBoard::new();
     board.disp.clear(Rgb888::BLACK).unwrap();
     for _ in 0..5 {
         board.latest_pos.x += RECT_SIZE as i32 + 20;
         board.paint();
-        board.disp.flush();
+        framebuffer_flush();
     }
+    0
 }
 
-#[cfg_attr(feature = "axstd", no_mangle)]
+#[no_mangle]
 fn main() -> ! {
     test_gpu();
     loop {

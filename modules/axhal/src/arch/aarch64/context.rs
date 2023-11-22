@@ -75,10 +75,9 @@ impl TaskContext {
 
     /// Initializes the context for a new task, with the given entry point and
     /// kernel stack.
-    pub fn init(&mut self, entry: usize, kstack_top: VirtAddr, tls_area: VirtAddr) {
+    pub fn init(&mut self, entry: usize, kstack_top: VirtAddr) {
         self.sp = kstack_top.as_usize() as u64;
         self.lr = entry as u64;
-        self.tpidr_el0 = tls_area.as_usize() as u64;
     }
 
     /// Switches to another task.
@@ -172,7 +171,6 @@ unsafe extern "C" fn fpstate_switch(_current_fpstate: &mut FpState, _next_fpstat
         msr     fpcr, x9
         msr     fpsr, x10
 
-        isb
         ret",
         options(noreturn),
     )

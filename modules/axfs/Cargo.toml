@@ -12,13 +12,11 @@ documentation = "https://rcore-os.github.io/arceos/axfs/index.html"
 [features]
 devfs = ["dep:axfs_devfs"]
 ramfs = ["dep:axfs_ramfs"]
-procfs = ["dep:axfs_ramfs"]
-sysfs = ["dep:axfs_ramfs"]
 fatfs = ["dep:fatfs"]
 myfs = ["dep:crate_interface"]
 use-ramdisk = []
 
-default = ["devfs", "ramfs", "fatfs", "procfs", "sysfs"]
+default = ["devfs", "ramfs", "fatfs"]
 
 [dependencies]
 log = "0.4"
@@ -32,7 +30,7 @@ axfs_vfs = { path = "../../crates/axfs_vfs" }
 axfs_devfs = { path = "../../crates/axfs_devfs", optional = true }
 axfs_ramfs = { path = "../../crates/axfs_ramfs", optional = true }
 axdriver = { path = "../axdriver", features = ["block"] }
-axsync = { path = "../axsync" }
+axsync = { path = "../axsync", default-features = false }
 crate_interface = { path = "../../crates/crate_interface", optional = true }
 
 [dependencies.fatfs]
@@ -50,5 +48,4 @@ features = [ # no std
 [dev-dependencies]
 axdriver = { path = "../axdriver", features = ["block", "ramdisk"] }
 driver_block = { path = "../../crates/driver_block", features = ["ramdisk"] }
-axsync = { path = "../axsync", features = ["multitask"] }
 axtask = { path = "../axtask", features = ["test"] }

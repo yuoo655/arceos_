@@ -250,8 +250,8 @@ where
     }
 }
 
-/// I/O poll results.
-#[derive(Debug, Default, Clone, Copy)]
+/// Struct for poll result.
+#[derive(Debug, Default)]
 pub struct PollState {
     /// Object can be read now.
     pub readable: bool,

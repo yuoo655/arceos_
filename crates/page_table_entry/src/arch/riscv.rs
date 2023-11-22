@@ -27,6 +27,12 @@ bitflags::bitflags! {
         /// Indicates the virtual page has been written since the last time the
         /// D bit was cleared.
         const D =   1 << 7;
+        /// Kernel. In C906, Cacheable and Buffer bits, required for atomic fetch_add
+        const K =   6 << 60;
+        /// In C906, Strong Order bit used to indicates the requirements of memory reading order, 
+        /// Device type need to set this bit to 1 to became readable and writable
+        /// while normal-memory does not need strong order.
+        const DV =  1 << 63;
     }
 }
 
@@ -45,6 +51,9 @@ impl From<PTEFlags> for MappingFlags {
         if f.contains(PTEFlags::U) {
             ret |= Self::USER;
         }
+        if f.contains(PTEFlags::DV) {
+            ret |= Self::DEVICE;
+        }
         ret
     }
 }
@@ -54,7 +63,7 @@ impl From<MappingFlags> for PTEFlags {
         if f.is_empty() {
             return Self::empty();
         }
-        let mut ret = Self::V;
+        let mut ret = Self::V | Self::K;
         if f.contains(MappingFlags::READ) {
             ret |= Self::R;
         }
@@ -66,6 +75,9 @@ impl From<MappingFlags> for PTEFlags {
         }
         if f.contains(MappingFlags::USER) {
             ret |= Self::U;
+        }
+        if f.contains(MappingFlags::DEVICE) {
+            ret |= Self::DV;
         }
         ret
     }

@@ -1,31 +1,38 @@
-#![cfg_attr(feature = "axstd", no_std)]
-#![cfg_attr(feature = "axstd", no_main)]
+#![no_std]
+#![no_main]
 
 #[macro_use]
-#[cfg(feature = "axstd")]
-extern crate axstd as std;
+extern crate libax;
 
-use std::io::{self, prelude::*};
-use std::net::{TcpStream, ToSocketAddrs};
+extern crate alloc;
 
-#[cfg(feature = "dns")]
-const DEST: &str = "ident.me:80";
-#[cfg(not(feature = "dns"))]
-const DEST: &str = "49.12.234.183:80";
+use alloc::vec::Vec;
+use libax::io::{self, prelude::*};
+use libax::net::{SocketAddr, TcpStream, ToSocketAddrs};
 
+const DEST_HOST: &str = "ident.me";
+const DEST_IP: &str = "49.12.234.183";
 const REQUEST: &str = "\
 GET / HTTP/1.1\r\n\
 Host: ident.me\r\n\
 Accept: */*\r\n\
 \r\n";
 
-fn client() -> io::Result<()> {
-    for addr in DEST.to_socket_addrs()? {
-        println!("dest: {} ({})", DEST, addr);
-    }
+fn get_addr() -> SocketAddr {
+    let dest = if cfg!(feature = "dns") {
+        println!("dest domain: {}", DEST_HOST);
+        DEST_HOST
+    } else {
+        DEST_IP
+    };
+    let addr_iter = (dest, 80).to_socket_addrs().unwrap().collect::<Vec<_>>();
+    println!("dest IP: {}\n", addr_iter[0].addr);
+    addr_iter[0]
+}
 
-    let mut stream = TcpStream::connect(DEST)?;
-    stream.write_all(REQUEST.as_bytes())?;
+fn client() -> io::Result {
+    let mut stream = TcpStream::connect(get_addr())?;
+    stream.write(REQUEST.as_bytes())?;
     let mut buf = [0; 2048];
     let n = stream.read(&mut buf)?;
     let response = core::str::from_utf8(&buf[..n]).unwrap();
@@ -33,7 +40,7 @@ fn client() -> io::Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "axstd", no_mangle)]
+#[no_mangle]
 fn main() {
     println!("Hello, simple http client!");
     client().expect("test http client failed");

@@ -6,9 +6,6 @@ use core::{alloc::Layout, cell::UnsafeCell, fmt, ptr::NonNull};
 #[cfg(feature = "preempt")]
 use core::sync::atomic::AtomicUsize;
 
-#[cfg(feature = "tls")]
-use axhal::tls::TlsArea;
-
 use axhal::arch::TaskContext;
 use memory_addr::{align_up_4k, VirtAddr};
 
@@ -52,9 +49,6 @@ pub struct TaskInner {
 
     kstack: Option<TaskStack>,
     ctx: UnsafeCell<TaskContext>,
-
-    #[cfg(feature = "tls")]
-    tls: TlsArea,
 }
 
 impl TaskId {
@@ -113,7 +107,7 @@ impl TaskInner {
 
 // private methods
 impl TaskInner {
-    fn new_common(id: TaskId, name: String) -> Self {
+    const fn new_common(id: TaskId, name: String) -> Self {
         Self {
             id,
             name,
@@ -132,12 +126,9 @@ impl TaskInner {
             wait_for_exit: WaitQueue::new(),
             kstack: None,
             ctx: UnsafeCell::new(TaskContext::new()),
-            #[cfg(feature = "tls")]
-            tls: TlsArea::alloc(),
         }
     }
 
-    /// Create a new task with the given entry function and stack size.
     pub(crate) fn new<F>(entry: F, name: String, stack_size: usize) -> AxTaskRef
     where
         F: FnOnce() + Send + 'static,
@@ -145,14 +136,8 @@ impl TaskInner {
         let mut t = Self::new_common(TaskId::new(), name);
         debug!("new task: {}", t.id_name());
         let kstack = TaskStack::alloc(align_up_4k(stack_size));
-
-        #[cfg(feature = "tls")]
-        let tls = VirtAddr::from(t.tls.tls_ptr() as usize);
-        #[cfg(not(feature = "tls"))]
-        let tls = VirtAddr::from(0);
-
         t.entry = Some(Box::into_raw(Box::new(entry)));
-        t.ctx.get_mut().init(task_entry as usize, kstack.top(), tls);
+        t.ctx.get_mut().init(task_entry as usize, kstack.top());
         t.kstack = Some(kstack);
         if t.name == "idle" {
             t.is_idle = true;
@@ -160,15 +145,8 @@ impl TaskInner {
         Arc::new(AxTask::new(t))
     }
 
-    /// Creates an "init task" using the current CPU states, to use as the
-    /// current task.
-    ///
-    /// As it is the current task, no other task can switch to it until it
-    /// switches out.
-    ///
-    /// And there is no need to set the `entry`, `kstack` or `tls` fields, as
-    /// they will be filled automatically when the task is switches out.
     pub(crate) fn new_init(name: String) -> AxTaskRef {
+        // init_task does not change PC and SP, so `entry` and `kstack` fields are not used.
         let mut t = Self::new_common(TaskId::new(), name);
         t.is_init = true;
         if t.name == "idle" {
@@ -357,8 +335,6 @@ impl CurrentTask {
     }
 
     pub(crate) unsafe fn init_current(init_task: AxTaskRef) {
-        #[cfg(feature = "tls")]
-        axhal::arch::write_thread_pointer(init_task.tls.tls_ptr() as usize);
         let ptr = Arc::into_raw(init_task);
         axhal::cpu::set_current_task_ptr(ptr);
     }

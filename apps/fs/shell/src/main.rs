@@ -1,29 +1,15 @@
-#![cfg_attr(feature = "axstd", no_std)]
-#![cfg_attr(feature = "axstd", no_main)]
-
-#[macro_use]
-#[cfg(feature = "axstd")]
-extern crate axstd as std;
-
-macro_rules! path_to_str {
-    ($path:expr) => {{
-        #[cfg(not(feature = "axstd"))]
-        {
-            $path.to_str().unwrap() // Path/OsString -> &str
-        }
-        #[cfg(feature = "axstd")]
-        {
-            $path.as_str() // String -> &str
-        }
-    }};
-}
+#![no_std]
+#![no_main]
 
 mod cmd;
 
-#[cfg(feature = "use-ramfs")]
+#[cfg(feature = "use_ramfs")]
 mod ramfs;
 
-use std::io::prelude::*;
+use libax::io::prelude::*;
+
+#[macro_use]
+extern crate libax;
 
 const LF: u8 = b'\n';
 const CR: u8 = b'\r';
@@ -34,17 +20,13 @@ const SPACE: u8 = b' ';
 const MAX_CMD_LEN: usize = 256;
 
 fn print_prompt() {
-    print!(
-        "arceos:{}$ ",
-        path_to_str!(std::env::current_dir().unwrap())
-    );
-    std::io::stdout().flush().unwrap();
+    print!("arceos:{}$ ", libax::env::current_dir().unwrap());
 }
 
-#[cfg_attr(feature = "axstd", no_mangle)]
+#[no_mangle]
 fn main() {
-    let mut stdin = std::io::stdin();
-    let mut stdout = std::io::stdout();
+    let mut stdin = libax::io::stdin();
+    let mut stdout = libax::io::stdout();
 
     let mut buf = [0; MAX_CMD_LEN];
     let mut cursor = 0;
@@ -69,14 +51,14 @@ fn main() {
             }
             BS | DL => {
                 if cursor > 0 {
-                    stdout.write_all(&[BS, SPACE, BS]).unwrap();
+                    stdout.write(&[BS, SPACE, BS]).unwrap();
                     cursor -= 1;
                 }
             }
             0..=31 => {}
             c => {
                 if cursor < MAX_CMD_LEN - 1 {
-                    stdout.write_all(&[c]).unwrap();
+                    stdout.write(&[c]).unwrap();
                     cursor += 1;
                 }
             }

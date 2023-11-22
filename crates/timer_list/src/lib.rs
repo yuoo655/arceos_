@@ -61,7 +61,7 @@ pub struct TimerList<E: TimerEvent> {
 
 impl<E> PartialOrd for TimerEventWrapper<E> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other)) // reverse ordering for Min-heap
+        other.deadline.partial_cmp(&self.deadline) // reverse ordering for Min-heap
     }
 }
 

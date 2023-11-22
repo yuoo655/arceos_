@@ -350,7 +350,20 @@ impl<A: StarfiveHal> StarfiveNic<A> {
             write_volatile((ioaddr + 0x1100 + 0x30) as *mut u32, 64);
         }
 
-        
+
+
+        log::info!("--------------tx flow contrl----------------------");
+        unsafe{
+            write_volatile((ioaddr + 0x70) as *mut u32, 0xffff0000);
+        }
+        log::info!("--------------tx flow contrl----------------------");
+        unsafe{
+            write_volatile((ioaddr + 0x70) as *mut u32, 1 << 1);
+        }
+        // log::info!("-------------tx flow contrl--------------------");
+        // unsafe {
+        //     write_volatile((ioaddr + 0x1100 + 0x30) as *mut u32, 64);
+        // }
 
 
 
@@ -394,39 +407,46 @@ impl<A: StarfiveHal> StarfiveNic<A> {
 
 
 
+        log::info!("--------------tx flow contrl----------------------");
+
+        unsafe{
+            write_volatile((ioaddr + 0x70) as *mut u32, 0xffff0002);
+        }
+        
+        
+
+        // -----------------------------recv
+
+        // for i in 0..10 {
+        //     A::mdelay(2000);
+
+        //     for i in 0..5 {
+        //         let rd = rx_ring.rd.read_volatile(i).unwrap();
+        //         log::info!("rd {:x?}", rd);
+        //     }
+
+
+        //     // let length = rd & 0x7fff;
+        //     let value = unsafe{
+        //         read_volatile((ioaddr + 0x115c) as *mut u32)
+        //     };
+        //     log::info!("Current Host rx buffer -----{:#x?}", value);
+        
+        // }
+
+
+
+
         log::info!("-------------------sending------------------------");
         let x: &mut [u8] = &mut [
             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xaa, 0xbb, 0xcc, 0xdd, 0x05, 0x06, 0x08, 0x06, 0x00,0x01, 
             0x08, 0x00, 0x06, 0x04, 0x00, 0x01, 0xaa, 0xbb, 0xcc, 0xdd, 0x05, 0x06, 
-            //192.168.1.104
-            0xc0, 0xa8, 0x01, 0x68, 
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-            //192.168.1.254
             0xc0, 0xa8, 0x01, 0xfe, 
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+            0xc0, 0xa8, 0x01, 0x04, 
             0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ];
-        
-        
-
-
-        for i in 0..10 {
-            A::mdelay(2000);
-
-            for i in 0..5 {
-                let rd = rx_ring.rd.read_volatile(i).unwrap();
-                log::info!("rd {:x?}", rd);
-            }
-
-
-            // let length = rd & 0x7fff;
-            let value = unsafe{
-                read_volatile((ioaddr + 0x115c) as *mut u32)
-            };
-            log::info!("Current Host rx buffer -----{:#x?}", value);
-        
-        }
-
         
         for i in 0..64{
         
@@ -436,8 +456,12 @@ impl<A: StarfiveHal> StarfiveNic<A> {
             let packet_va = A::phys_to_virt(packet_pa);
             let buff = packet_va as *mut u8;
             unsafe {
-                core::ptr::copy_nonoverlapping(raw_pointer as *const u8, buff as *mut u8, 0x2a);
+                core::ptr::copy_nonoverlapping(raw_pointer as *const u8, buff as *mut u8, 0x3c);
             }
+
+
+            sifive_ccache_flush_range::<A>(0x8200_1000 as usize, 0x8200_3000 );
+            sifive_ccache_flush_range::<A>(0x8201_0000 as usize, 0x8203_0000 as usize);
 
             let mut td = tx_ring.td.read_volatile(i).unwrap();
             
@@ -451,14 +475,31 @@ impl<A: StarfiveHal> StarfiveNic<A> {
                 core::arch::asm!("fence	ow,ow");
             }
             A::fence();
-        
+            
             sifive_ccache_flush_range::<A>(0x8200_1000 as usize, 0x8200_3000);
             sifive_ccache_flush_range::<A>(0x8201_0000 as usize, 0x8203_0000 as usize);
+            tx_ring.td.write_volatile(i, &td);
             A::mdelay(500);
             log::info!("td {:x?}", td);
-            
+            // let offset = mem::size_of::<TxDes>() * i;
+            let tail_ptr = tdes_base + (mem::size_of::<TxDes>() * (i+1)) as u32;
+
             unsafe{
-                write_volatile((ioaddr + 0x1120) as *mut u32, (i+1) as u32);
+                core::arch::asm!("fence	ow,ow");
+            }
+            sifive_ccache_flush_range::<A>(0x8200_1000 as usize, 0x8200_3000 );
+            sifive_ccache_flush_range::<A>(0x8201_0000 as usize, 0x8203_0000 as usize);
+            unsafe{
+                write_volatile((ioaddr + 0x1120) as *mut u32, tail_ptr);
+            }
+            loop{
+                let mut td = tx_ring.td.read_volatile(i).unwrap();
+                log::info!("td {:x?}", td);    
+
+                if td.tdes3 & ( 1 << 31) == 0{
+                    break;
+                }
+                A::mdelay(1000);
             }
             A::mdelay(1000);    
                 

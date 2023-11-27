@@ -60,8 +60,8 @@ impl <A: CvitekNicTraits> CvitekNicDevice<A> {
         info!("finish try to reset dma!");
 
         // alloc rx_ring and tx_ring
-        self.tx_rings.init_dma_desc_rings(0x9001_0000);
         self.rx_rings.init_dma_desc_rings(0x9000_0000);
+        self.tx_rings.init_dma_desc_rings(0x9001_0000);
 
         
 
@@ -78,7 +78,7 @@ impl <A: CvitekNicTraits> CvitekNicDevice<A> {
         // mdio_write::<A>(self.iobase_va,0xde1,0x117);
         unsafe{
             write_volatile((self.iobase_va + DMA_BUS_MODE) as *mut u32, 0x3900800);
-            write_volatile((self.iobase_va + DMA_AXI_BUS_MODE) as *mut u32, 0x12100f);
+            // write_volatile((self.iobase_va + DMA_AXI_BUS_MODE) as *mut u32, 0x12100f);
 
             // rx
             write_volatile((self.iobase_va + DMA_RCV_BASE_ADDR) as *mut u32, 0x89000000);
@@ -121,26 +121,79 @@ impl <A: CvitekNicTraits> CvitekNicDevice<A> {
 
 
         // recv test
-        for i in 0..10 {
-            A::mdelay(2000);
+        // for i in 0..10 {
+        //     A::mdelay(2000);
 
-            for i in 0..5 {
-                let rd = self.rx_rings.rd.read_volatile(i).unwrap();
-                log::info!("rd {:x?}", rd);
+        //     for i in 0..5 {
+        //         let rd = self.rx_rings.rd.read_volatile(i).unwrap();
+        //         log::info!("rd {:x?}", rd);
+        //     }
+        //     let value = unsafe{
+        //         read_volatile((self.iobase_va + 0x104c) as *mut u32)
+        //     };
+        //     log::info!("Current Host rx descriptor -----{:#x?}", value);
+        // }
+
+
+        // send test
+
+        let x: &mut [u8] = &mut [
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xaa, 0xbb, 0xcc, 0xdd, 0x05, 0x06, 0x08, 0x06, 0x00,0x01, 
+            0x08, 0x00, 0x06, 0x04, 0x00, 0x01, 0xaa, 0xbb, 0xcc, 0xdd, 0x05, 0x06, 
+            0xc0, 0xa8, 0x01, 0x16, 
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+            0xc0, 0xa8, 0x01, 0x08, 
+            0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+
+        let tskb_start = 0x9001_0000 as usize;
+
+        for i in 0..512{
+            let buff_addr = tskb_start + 0x1000 * i;
+            let raw_pointer = x.as_mut_ptr();
+            let packet_pa: usize = tskb_start + 0x1000 * i;
+            let packet_va = A::phys_to_virt(packet_pa);
+            let buff = packet_va as *mut u8;
+            unsafe {
+                core::ptr::copy_nonoverlapping(raw_pointer as *const u8, buff as *mut u8, 0x2a);
             }
-            let value = unsafe{
-                read_volatile((self.iobase_va + 0x104c) as *mut u32)
-            };
-            log::info!("Current Host rx descriptor -----{:#x?}", value);
-        
+            let mut td = self.tx_rings.td.read_volatile(i).unwrap();
+
+            td.dmamac_addr = buff_addr as u32;
+            td.dmamac_cntl = 0x60000156;
+            // td.txrx_status |= 1 << 29;
+            // td.txrx_status |= 1 << 28;
+            td.txrx_status |= 1 << 31;
+            self.tx_rings.td.write_volatile(i, &td);
+            unsafe{
+                core::arch::asm!("fence	ow,ow");
+            }
+            unsafe{
+                write_volatile((self.iobase_va + DMA_XMT_POLL_DEMAND) as *mut u32, 0x1);
+            }
+            A::mdelay(10000);   
             let value = unsafe{
                 read_volatile((self.iobase_va + 0x1048) as *mut u32)
             };
-            // log::info!("Current Host tx descriptor -----{:#x?}", value);
 
-            // dump_reg(self.iobase_va);
+
+            log::info!("Current Host tx descriptor -----{:#x?}", value);
+
+            let intr_status = unsafe{
+                read_volatile((self.iobase_va + 0x1014) as *mut u32)
+            };
+            let state = (intr_status & 0x00700000) >> 20;
+            log::info!("tx state{:?}", state);
+
+            loop{
+                let mut td = self.tx_rings.td.read_volatile(i).unwrap();
+                log::info!("td {:x?}", td);    
+                if td.txrx_status & ( 1 << 31) == 0{
+                    break;
+                }
+            }
         }
-
 
         info!("init tx and rxring\n");
     }
@@ -326,10 +379,10 @@ impl<A: CvitekNicTraits> TxRing<A> {
     pub fn init_dma_desc_rings(&mut self, tskb_start: usize) {
         info!("tx set_idx_addr_owner");
 
-        for i in 0..16 {
+        for i in 0..512 {
             self.init_tx_desc(i,  false);
         }
-        self.init_tx_desc(15,  true);
+        self.init_tx_desc(511,  true);
 
     }
 

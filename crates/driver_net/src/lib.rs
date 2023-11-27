@@ -8,6 +8,12 @@
 #[cfg(feature = "ixgbe")]
 /// ixgbe NIC device driver.
 pub mod ixgbe;
+
+#[cfg(feature = "starfive")]
+pub mod starfive;
+#[cfg(feature = "starfive")]
+pub use starfive::*;
+
 mod net_buf;
 
 use core::ptr::NonNull;

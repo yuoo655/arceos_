@@ -162,8 +162,6 @@ impl <A: CvitekNicTraits> CvitekNicDevice<A> {
 
             td.dmamac_addr = buff_addr as u32;
             td.dmamac_cntl = 0x60000156;
-            // td.txrx_status |= 1 << 29;
-            // td.txrx_status |= 1 << 28;
             td.txrx_status |= 1 << 31;
             self.tx_rings.td.write_volatile(i, &td);
             unsafe{
@@ -240,9 +238,8 @@ impl <A: CvitekNicTraits> CvitekNicDevice<A> {
             return None;
         }
 
-        // good frame
-        // clean_idx = idx;
-        let frame_len = rdes1 ;
+
+        let frame_len = (rdes0 as usize & DESC_RXSTS_FRMLENMSK) >> DESC_RXSTS_FRMLENSHFT ;
 
         // get data from skb
         let skb_va = rx_rings.skbuf[idx] as *mut u8;
@@ -266,9 +263,22 @@ impl <A: CvitekNicTraits> CvitekNicDevice<A> {
 
         tx_rings.set_idx_addr_owner(idx, true, true, false, true, packet_pa, packet_len);
 
-        tx_rings.idx = (idx + 1) % 512;
+        
 
-        tx_rings.set_tail_ptr(self.iobase_va);
+        unsafe{
+            write_volatile((self.iobase_va + DMA_XMT_POLL_DEMAND) as *mut u32, 0x1);
+        }
+
+
+        // wait until transmit finish
+        loop{
+            let td = tx_rings.td.read_volatile(idx).unwrap();
+            if td.txrx_status & ( 1 << 31) == 0{
+                break;
+            }
+        }
+
+        tx_rings.idx = (idx + 1) % 512;
     }
 
 }
@@ -311,9 +321,12 @@ impl<A:CvitekNicTraits> RxRing<A> {
         info!("rx init dma_desc_rings");
 
 
-        for i in 0..16 {
+        for i in 0..64 {
             let buff_addr = skb_start + 0x1000 * i;
             self.set_idx_addr_owner(i, buff_addr);
+
+            let buff_va = A::phys_to_virt(buff_addr);
+            self.skbuf.push(buff_va);
         }
 
 
@@ -426,9 +439,13 @@ impl<A: CvitekNicTraits> TxRing<A> {
             dmamac_next: 0,
         };
 
-        td.txrx_status = skb_phys_addr as u32; // Buffer 1
-        td.dmamac_cntl = ((skb_phys_addr >> 32) & 0xff) as u32; // Not used
+        td.dmamac_addr = skb_phys_addr as u32;
+        td.dmamac_cntl = 0x60000156;
+        td.txrx_status |= 1 << 31;
 
+        unsafe{
+            core::arch::asm!("fence	ow,ow");
+        }
 
         self.td.write_volatile(idx, &td);
     }

@@ -92,7 +92,7 @@ impl<A:CvitekNicTraits> NetDriverOps for CvitekNic<A> {
         use cvitek_nic::TxBuffer;
 
         let idx = self.device.get_tx_idx();
-        let skb_pa = 0x91000000 + idx * 0x1000;
+        let skb_pa = 0x9001_0000 + idx * 0x1000;
         let skb_va = A::phys_to_virt(skb_pa);
         let new_va = skb_va + idx * 0x1000;
         let packet = Packet::new(new_va as *mut u8, size);

@@ -48,8 +48,8 @@ pub (crate) const STOREFORWARD:u32=1<<21;
 pub (crate) const RXSTART:u32=1<<1;
 pub (crate) const TXSTART:u32=1<<13;
 
-pub (crate) const CONFIG_TX_DESCR_NUM:usize =16;
-pub (crate) const CONFIG_RX_DESCR_NUM:usize =16;
+pub (crate) const CONFIG_TX_DESCR_NUM:usize =64;
+pub (crate) const CONFIG_RX_DESCR_NUM:usize =64;
 
 //irq
 
@@ -93,3 +93,6 @@ pub const SIFIVE_CCACHE_WAY_ENABLE:usize = 0x8;
 
 pub const MAC_ADDR_HI: usize = 0x40;
 pub const MAC_ADDR_LO: usize = 0x44;
+
+pub const DESC_RXSTS_FRMLENMSK	:usize = 	0x3FFF << 16;
+pub const DESC_RXSTS_FRMLENSHFT:usize = 		16;

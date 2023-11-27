@@ -40,3 +40,5 @@ send /home/susan/arceos_hsp/cv1811h/arceos-cv1811.itb
 结束后
 c
 bootm 0x82000000
+
+

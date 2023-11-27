@@ -169,14 +169,7 @@ pub fn init_drivers() -> AllDevices {
     let mut all_devs = AllDevices::default();
     all_devs.probe();
 
-    #[cfg(feature = "net")]
-    {
-        debug!("number of NICs: {}", all_devs.net.len());
-        for (i, dev) in all_devs.net.iter().enumerate() {
-            assert_eq!(dev.device_type(), DeviceType::Net);
-            debug!("  NIC {}: {:?}", i, dev.device_name());
-        }
-    }
+
     #[cfg(feature = "phy")]
     {
         debug!("number of Phys: {}", all_devs.phy.len());
@@ -185,6 +178,16 @@ pub fn init_drivers() -> AllDevices {
             debug!("  PHY {}: {:?}", i, dev.device_name());
         }
     }
+
+    #[cfg(feature = "net")]
+    {
+        debug!("number of NICs: {}", all_devs.net.len());
+        for (i, dev) in all_devs.net.iter().enumerate() {
+            assert_eq!(dev.device_type(), DeviceType::Net);
+            debug!("  NIC {}: {:?}", i, dev.device_name());
+        }
+    }
+    
     #[cfg(feature = "block")]
     {
         debug!("number of block devices: {}", all_devs.block.len());

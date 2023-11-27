@@ -54,3 +54,42 @@ pub (crate) const CONFIG_RX_DESCR_NUM:usize =16;
 //irq
 
 pub (crate) const GMAC_IRQ:usize = 31;
+
+
+
+pub const DMA_BUS_MODE: usize = 0x00001000;
+
+/* SW Reset */
+pub const DMA_BUS_MODE_SFT_RESET: usize = 0x00000001; /* Software Reset */
+
+/* AXI Master Bus Mode */
+pub const DMA_AXI_BUS_MODE: usize = 0x00001028;
+
+
+pub const DMA_RCV_BASE_ADDR: usize = 0x0000100c; /* Receive List Base */
+
+pub const DMA_TX_BASE_ADDR: usize = 0x00001010; /* Receive List Base */
+
+/* Ctrl (Operational Mode) */
+pub const DMA_CONTROL: usize = 0x00001018;
+
+pub const DMA_CONTROL_SR: u32 = 0x00000002;
+
+pub const MAC_ENABLE_TX: u32 = 1 << 3; /* Transmitter Enable */
+pub const MAC_ENABLE_RX: u32 = 1 << 2; /* Receiver Enable */
+
+/* Received Poll Demand */
+pub const DMA_XMT_POLL_DEMAND: u32 = 0x00001004;
+
+/* Received Poll Demand */
+pub const DMA_RCV_POLL_DEMAND: u32 = 0x00001008;
+
+
+
+pub const DMA_CONTROL_ST:u32 = 		0x00002000;
+
+
+pub const SIFIVE_CCACHE_WAY_ENABLE:usize = 0x8;
+
+pub const MAC_ADDR_HI: usize = 0x40;
+pub const MAC_ADDR_LO: usize = 0x44;

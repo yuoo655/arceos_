@@ -58,17 +58,90 @@ impl <A: CvitekNicTraits> CvitekNicDevice<A> {
             }
         }
         info!("finish try to reset dma!");
+
         // alloc rx_ring and tx_ring
-        self.rx_rings.init_dma_desc_rings();
-        self.tx_rings.init_dma_desc_rings();
+        self.tx_rings.init_dma_desc_rings(0x9001_0000);
+        self.rx_rings.init_dma_desc_rings(0x9000_0000);
+
+        
+
+        mdio_write::<A>(self.iobase_va,0xde1,0x117);
+
+        mdio_write::<A>(self.iobase_va,0x3300,0x17);
+
+        mdio_write::<A>(self.iobase_va,0x3,0x357);
+
+        mdio_write::<A>(self.iobase_va,0x14,0x397);
+
+        mdio_write::<A>(self.iobase_va,0x4003,0x357);
+
+        // mdio_write::<A>(self.iobase_va,0xde1,0x117);
+        unsafe{
+            write_volatile((self.iobase_va + DMA_BUS_MODE) as *mut u32, 0x3900800);
+            write_volatile((self.iobase_va + DMA_AXI_BUS_MODE) as *mut u32, 0x12100f);
+
+            // rx
+            write_volatile((self.iobase_va + DMA_RCV_BASE_ADDR) as *mut u32, 0x89000000);
+            // tx
+            write_volatile((self.iobase_va + DMA_TX_BASE_ADDR) as *mut u32, 0x89000000 + 0x3000);
+
+            let macid_lo = 0xddccbbaa;
+            let macid_hi = 0x0605;
+            write_volatile((self.iobase_va  + MAC_ADDR_HI) as *mut u32, macid_hi);
+            write_volatile((self.iobase_va  + MAC_ADDR_LO) as *mut u32, macid_lo);
+
+            write_volatile((self.iobase_va ) as *mut u32, 0x207);
+            
+            stmmac_set_mac(self.iobase_va , true);
+
+            write_volatile((self.iobase_va + DMA_CONTROL) as *mut u32, 0x2000900);
+            write_volatile((self.iobase_va + DMA_CONTROL) as *mut u32, 0x2200904);
+
+
+            let mut value = read_volatile((self.iobase_va + DMA_CONTROL) as *mut u32);
+            value |= DMA_CONTROL_SR;
+            write_volatile((self.iobase_va + DMA_CONTROL) as *mut u32, value);
+
+            let mut value = read_volatile((self.iobase_va + DMA_CONTROL) as *mut u32);
+            value |= DMA_CONTROL_ST;
+            write_volatile((self.iobase_va + DMA_CONTROL) as *mut u32, value);
+        }
         // set mac regs
         unsafe{
-            write_volatile((self.iobase_va+GMAC_DMA_REG_OPMODE) as *mut u32, 0x2202906);
-            write_volatile((self.iobase_va+GMAC_DMA_REG_BUS_MODE) as *mut u32, 0x3900800);
-            write_volatile((self.iobase_va+GMAC_REG_CONF) as *mut u32, 0x41cc00);
-            write_volatile((self.iobase_va+GMAC_DMA_REG_INTENABLE) as *mut u32, 0x10040);
+            // write_volatile((self.iobase_va+GMAC_DMA_REG_OPMODE) as *mut u32, 0x2202906);
+            // write_volatile((self.iobase_va+GMAC_DMA_REG_BUS_MODE) as *mut u32, 0x3900800);
+
+            write_volatile((self.iobase_va+GMAC_REG_FLOWCONTROL) as *mut u32, 0xffff000e);
+            write_volatile((self.iobase_va+GMAC_REG_CONF) as *mut u32, 0x41cc0c);
         }
         
+
+        dump_reg(self.iobase_va);
+
+
+
+        // recv test
+        for i in 0..10 {
+            A::mdelay(2000);
+
+            for i in 0..5 {
+                let rd = self.rx_rings.rd.read_volatile(i).unwrap();
+                log::info!("rd {:x?}", rd);
+            }
+            let value = unsafe{
+                read_volatile((self.iobase_va + 0x104c) as *mut u32)
+            };
+            log::info!("Current Host rx descriptor -----{:#x?}", value);
+        
+            let value = unsafe{
+                read_volatile((self.iobase_va + 0x1048) as *mut u32)
+            };
+            // log::info!("Current Host tx descriptor -----{:#x?}", value);
+
+            // dump_reg(self.iobase_va);
+        }
+
+
         info!("init tx and rxring\n");
     }
     pub fn read_mac_address(&self) -> [u8; 6]
@@ -181,10 +254,20 @@ impl<A:CvitekNicTraits> RxRing<A> {
         }
     }
 
-    pub fn init_dma_desc_rings(&mut self) {
+    pub fn init_dma_desc_rings(&mut self, skb_start: usize) {
         info!("rx init dma_desc_rings");
+
+
+        for i in 0..16 {
+            let buff_addr = skb_start + 0x1000 * i;
+            self.set_idx_addr_owner(i, buff_addr);
+        }
+
+
         
     }
+
+
 
     /// Release the next RDes to the DMA engine
     pub fn set_idx_addr_owner(&mut self, idx: usize, skb_phys_addr: usize) {
@@ -195,18 +278,16 @@ impl<A:CvitekNicTraits> RxRing<A> {
             dmamac_next: 0,
         };
 
-        // dwmac_desc_set_addr
-        rd.txrx_status = skb_phys_addr as u32;
-        rd.dmamac_cntl = ((skb_phys_addr >> 32) & 0xFF) as u32;
+        
+        rd.txrx_status = 1 << 31 as u32;
 
-        // dwmac_set_rx_owner
-        // rd.rdes3 |= RDES3_INT_ON_COMPLETION_EN;
+        rd.dmamac_cntl |= 0x600;
 
+        rd.dmamac_addr = skb_phys_addr as u32;
+
+        
         self.rd.write_volatile(idx, &rd);
 
-        /*unsafe {
-            core::arch::asm!("dsb sy");
-        }*/
     }
 
     pub fn set_head_tail_ptr(&mut self, iobase: usize) {
@@ -242,9 +323,34 @@ impl<A: CvitekNicTraits> TxRing<A> {
             skbuf: skbuf,
         }
     }
-    pub fn init_dma_desc_rings(&mut self) {
+    pub fn init_dma_desc_rings(&mut self, tskb_start: usize) {
         info!("tx set_idx_addr_owner");
+
+        for i in 0..16 {
+            self.init_tx_desc(i,  false);
+        }
+        self.init_tx_desc(15,  true);
+
     }
+
+    pub fn init_tx_desc(&mut self, idx: usize, end:bool) {
+        let mut td: Des = Des {
+            txrx_status: 0,
+            dmamac_cntl: 0,
+            dmamac_addr: 0,
+            dmamac_next: 0,
+        };
+
+        td.txrx_status &= !(1 << 31);
+
+
+        if end {
+            td.txrx_status |= 1 << 21;
+        }
+    
+        self.td.write_volatile(idx, &td);
+    }
+
 
     pub fn set_idx_addr_owner(
         &mut self,
@@ -366,4 +472,62 @@ pub trait CvitekNicTraits {
     fn current_time() -> usize;
 
     fn register_irq(irq_num: usize, handler: IrqHandler) -> bool;
+}
+
+
+pub fn stmmac_set_mac(ioaddr: usize, enable: bool) {
+    let old_val: u32;
+    let mut value: u32;
+
+    old_val = unsafe { read_volatile(ioaddr as *mut u32) };
+    value = old_val;
+
+    if enable {
+        value |= MAC_ENABLE_RX | MAC_ENABLE_TX;
+    } else {
+        value &= !(MAC_ENABLE_TX | MAC_ENABLE_RX);
+    }
+
+    if value != old_val {
+        unsafe { write_volatile(ioaddr as *mut u32, value) }
+    }
+}
+
+
+pub fn dump_reg(ioaddr: usize) {
+    log::info!("------------------------------dumpreg--------------------------------------");
+    for i in 0..23 {
+        let value = unsafe { read_volatile((ioaddr + 0x00001000 + i * 4) as *mut u32) };
+        log::info!("reg {:?} = {:#x?}", i, value);
+    }
+}
+
+
+pub const MII_BUSY: u32 = (1 << 0);
+pub fn mdio_write<A: CvitekNicTraits>(ioaddr: usize, data: u32, value: u32) {
+
+    loop {
+        let value = unsafe { read_volatile((ioaddr + 0x10) as *mut u32) };
+
+        if value & MII_BUSY != 1 {
+            break;
+        }
+        A::mdelay(10);
+    }
+
+
+
+    unsafe{
+        write_volatile((ioaddr + 0x14) as *mut u32, data);
+        write_volatile((ioaddr + 0x10) as *mut u32, value);
+    }
+
+    loop {
+        let value = unsafe { read_volatile((ioaddr + 0x10) as *mut u32) };
+
+        if value & MII_BUSY != 1 {
+            break;
+        }
+        A::mdelay(10);
+    }
 }

@@ -197,7 +197,7 @@ impl Process {
     /// 根据给定参数创建一个新的进程，作为应用程序初始进程
     pub fn init(args: Vec<String>, envs: &Vec<String>) -> AxResult<AxTaskRef> {
         let path = args[0].clone();
-        let mut memory_set = MemorySet::new_with_kernel_mapped();
+        let mut memory_set = MemorySet::new_memory_set();
         #[cfg(feature = "signal")]
         {
             use axhal::mem::virt_to_phys;

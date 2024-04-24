@@ -61,8 +61,17 @@ impl MemorySet {
         }
     }
 
+    /// Create a new MemorySet
+    pub fn new_memory_set() -> Self {
+        if cfg!(target_arch = "aarch64") {
+            Self::new_empty()
+        } else {
+            Self::new_with_kernel_mapped()
+        }
+    }
+
     /// Create a new MemorySet with kernel mapped regions.
-    pub fn new_with_kernel_mapped() -> Self {
+    fn new_with_kernel_mapped() -> Self {
         let mut page_table = PageTable::try_new().expect("Error allocating page table.");
 
         for r in memory_regions() {

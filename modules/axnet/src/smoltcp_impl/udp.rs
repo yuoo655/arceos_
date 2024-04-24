@@ -70,6 +70,15 @@ impl UdpSocket {
         self.nonblock.store(nonblocking, Ordering::Release);
     }
 
+    /// Set the TTL (time-to-live) option for this socket.
+    ///
+    /// The TTL is the number of hops that a packet is allowed to live.
+    pub fn set_socket_ttl(&self, ttl: u8) {
+        SOCKET_SET.with_socket_mut::<udp::Socket, _, _>(self.handle, |socket| {
+            socket.set_hop_limit(Some(ttl))
+        });
+    }
+
     /// Binds an unbound socket to the given address and port.
     ///
     /// It's must be called before [`send_to`](Self::send_to) and
@@ -89,6 +98,9 @@ impl UdpSocket {
             addr: (!is_unspecified(local_endpoint.addr)).then_some(local_endpoint.addr),
             port: local_endpoint.port,
         };
+
+        SOCKET_SET.bind_check(local_endpoint.addr, local_endpoint.port)?;
+
         SOCKET_SET.with_socket_mut::<udp::Socket, _, _>(self.handle, |socket| {
             socket.bind(endpoint).or_else(|e| match e {
                 BindError::InvalidState => ax_err!(AlreadyExists, "socket bind() failed"),
@@ -190,11 +202,11 @@ impl UdpSocket {
 
     /// Close the socket.
     pub fn shutdown(&self) -> AxResult {
+        SOCKET_SET.poll_interfaces();
         SOCKET_SET.with_socket_mut::<udp::Socket, _, _>(self.handle, |socket| {
             debug!("UDP socket {}: shutting down", self.handle);
             socket.close();
         });
-        SOCKET_SET.poll_interfaces();
         Ok(())
     }
 

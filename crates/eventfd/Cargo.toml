@@ -1,0 +1,13 @@
+[package]
+name = "eventfd"
+version = "0.1.0"
+edition = "2021"
+authors = ["binary.bruce <myth.litao@foxmail.com>"]
+description = "EventFd implementation"
+license = "GPL-3.0-or-later OR Apache-2.0"
+homepage = "https://github.com/rcore-os/arceos"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bitflags = "2.2"

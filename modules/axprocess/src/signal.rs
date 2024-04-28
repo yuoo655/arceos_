@@ -330,3 +330,10 @@ impl SignalCaller for SignalCallerImpl {
         send_signal_to_thread(tid, signum).unwrap();
     }
 }
+
+/// check if the current task has a signal pending
+#[no_mangle]
+#[cfg(feature = "signal")]
+pub extern "Rust" fn current_have_signal() -> bool {
+    current_process().have_signals().is_some()
+}

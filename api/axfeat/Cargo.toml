@@ -16,7 +16,7 @@ default = []
 monolithic = ["axruntime/monolithic", "axhal/monolithic", "dep:axprocess"]
 
 # Signal
-signal = ["axruntime/signal"]
+signal = ["axruntime/signal", "axnet/signal"]
 
 # Futex support
 futex = ["axprocess/futex"]

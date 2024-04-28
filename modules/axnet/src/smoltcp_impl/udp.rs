@@ -20,6 +20,7 @@ pub struct UdpSocket {
     local_addr: RwLock<Option<IpEndpoint>>,
     peer_addr: RwLock<Option<IpEndpoint>>,
     nonblock: AtomicBool,
+    reuse_addr: AtomicBool,
 }
 
 impl UdpSocket {
@@ -33,6 +34,7 @@ impl UdpSocket {
             local_addr: RwLock::new(None),
             peer_addr: RwLock::new(None),
             nonblock: AtomicBool::new(false),
+            reuse_addr: AtomicBool::new(false),
         }
     }
 
@@ -79,6 +81,22 @@ impl UdpSocket {
         });
     }
 
+    /// Returns whether this socket is in reuse address mode.
+    #[inline]
+    pub fn is_reuse_addr(&self) -> bool {
+        self.reuse_addr.load(Ordering::Acquire)
+    }
+
+    /// Moves this UDP socket into or out of reuse address mode.
+    ///
+    /// When a socket is bound, the `SO_REUSEADDR` option allows multiple sockets to be bound to the
+    /// same address if they are bound to different local addresses. This option must be set before
+    /// calling `bind`.
+    #[inline]
+    pub fn set_reuse_addr(&self, reuse_addr: bool) {
+        self.reuse_addr.store(reuse_addr, Ordering::Release);
+    }
+
     /// Binds an unbound socket to the given address and port.
     ///
     /// It's must be called before [`send_to`](Self::send_to) and
@@ -99,7 +117,10 @@ impl UdpSocket {
             port: local_endpoint.port,
         };
 
-        SOCKET_SET.bind_check(local_endpoint.addr, local_endpoint.port)?;
+        if !self.is_reuse_addr() {
+            // Check if the address is already in use
+            SOCKET_SET.bind_check(local_endpoint.addr, local_endpoint.port)?;
+        }
 
         SOCKET_SET.with_socket_mut::<udp::Socket, _, _>(self.handle, |socket| {
             socket.bind(endpoint).or_else(|e| match e {
@@ -295,6 +316,15 @@ impl UdpSocket {
             f()
         } else {
             loop {
+                #[cfg(feature = "signal")]
+                unsafe {
+                    extern "Rust" {
+                        fn current_have_signal() -> bool;
+                    }
+                    if current_have_signal() {
+                        return Err(AxError::Interrupted);
+                    }
+                }
                 SOCKET_SET.poll_interfaces();
                 match f() {
                     Ok(t) => return Ok(t),

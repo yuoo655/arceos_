@@ -508,13 +508,11 @@ impl MemorySet {
     pub fn mremap(&mut self, old_start: VirtAddr, old_size: usize, new_size: usize) -> isize {
         info!(
             "[mremap] old_start: {:?}, old_size: {:?}), new_size: {:?}",
-            old_start,
-            old_size,
-            new_size
+            old_start, old_size, new_size
         );
 
         // Todo: check flags
-        let start = self.find_free_area(old_start, new_size); 
+        let start = self.find_free_area(old_start, new_size);
         if start.is_none() {
             return -1;
         }
@@ -523,7 +521,7 @@ impl MemorySet {
         let old_page_end_addr = old_start + old_size - 1;
         let old_page_end = old_page_end_addr.align_down_4k().into();
         let old_page_start: usize = old_page_start_addr.into();
-          
+
         let addr: isize = match start {
             Some(start) => {
                 info!("found area [{:?}, {:?})", start, start + new_size);
@@ -533,7 +531,8 @@ impl MemorySet {
                     new_size,
                     MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE,
                     None,
-                    None);
+                    None,
+                );
                 flush_tlb(None);
 
                 let end = start + new_size;
@@ -551,14 +550,17 @@ impl MemorySet {
                                     core::slice::from_raw_parts(vaddr.as_ptr(), PAGE_SIZE_4K)
                                 };
                                 let new_data = unsafe {
-                                    core::slice::from_raw_parts_mut(page_start.as_mut_ptr(), PAGE_SIZE_4K)
+                                    core::slice::from_raw_parts_mut(
+                                        page_start.as_mut_ptr(),
+                                        PAGE_SIZE_4K,
+                                    )
                                 };
                                 new_data[..PAGE_SIZE_4K].copy_from_slice(old_data);
                             }
                         }
                         Err(PagingError::NotMapped) => {
                             error!("NotMapped addr: {:x}", vaddr);
-                            continue
+                            continue;
                         }
                         _ => return -1,
                     };
@@ -599,8 +601,8 @@ impl MemorySet {
                         return Err(AxError::BadAddress);
                     }
                     Ok(())
-                },
-                _ => Ok(())
+                }
+                _ => Ok(()),
             }
         } else {
             Err(AxError::InvalidInput)
@@ -683,9 +685,12 @@ impl Drop for MemorySet {
 }
 
 /// 验证地址是否已分配页面
-pub fn check_page_table_entry_validity(addr: VirtAddr, page_table: &PageTable) -> Result<(), PagingError> {
+pub fn check_page_table_entry_validity(
+    addr: VirtAddr,
+    page_table: &PageTable,
+) -> Result<(), PagingError> {
     let entry = page_table.get_entry_mut(addr);
-    
+
     if entry.is_err() {
         // 地址不合法
         return Err(PagingError::NoMemory);

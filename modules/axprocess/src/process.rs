@@ -533,7 +533,6 @@ impl Process {
             .insert(new_task.id().as_u64(), Arc::clone(&new_task));
         #[cfg(feature = "signal")]
         let new_handler = if flags.contains(CloneFlags::CLONE_SIGHAND) {
-            // let curr_id = current().id().as_u64();
             self.signal_modules
                 .lock()
                 .get_mut(&current().id().as_u64())
@@ -550,7 +549,6 @@ impl Process {
                     .lock()
                     .clone(),
             ))
-            // info!("curr_id: {:X}", (&curr_id as *const _ as usize));
         };
         // 检查是否在父任务中写入当前新任务的tid
         if flags.contains(CloneFlags::CLONE_PARENT_SETTID)
@@ -622,13 +620,6 @@ impl Process {
         let return_id: u64;
         // 决定是创建线程还是进程
         if flags.contains(CloneFlags::CLONE_THREAD) {
-            // // 若创建的是线程，那么不用新建进程
-            // info!("task len: {}", inner.tasks.len());
-            // info!("task address :{:X}", (&new_task as *const _ as usize));
-            // info!(
-            //     "task address: {:X}",
-            //     (&Arc::clone(&new_task)) as *const _ as usize
-            // );
             self.tasks.lock().push(Arc::clone(&new_task));
             #[cfg(feature = "signal")]
             self.signal_modules.lock().insert(
@@ -690,10 +681,6 @@ impl Process {
         // 没有给定用户栈的时候，只能是共享了地址空间，且原先调用clone的有用户栈，此时已经在之前的trap clone时复制了
         if let Some(stack) = stack {
             trap_frame.set_user_sp(stack);
-            // info!(
-            //     "New user stack: sepc:{:X}, stack:{:X}",
-            //     trap_frame.sepc, trap_frame.regs.sp
-            // );
         }
         new_task.set_trap_context(trap_frame);
         new_task.set_trap_in_kernel_stack();

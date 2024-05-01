@@ -1,9 +1,10 @@
 use axfs::api::FileIO;
 use axhal::{mem::VirtAddr, time::current_ticks};
 use axprocess::{current_process, yield_now_task};
+use axsignal::signal_no::SignalNo;
 use bitflags::bitflags;
 extern crate alloc;
-use crate::{SyscallError, SyscallResult, TimeSecs, TimeVal};
+use crate::{SyscallError, SyscallResult, TimeSecs};
 use alloc::{sync::Arc, vec::Vec};
 bitflags! {
     /// 在文件上等待或者发生过的事件
@@ -214,6 +215,7 @@ pub fn syscall_ppoll(args: [usize; 6]) -> SyscallResult {
 /// * `ufds` - *mut PollFd
 /// * `nfds` - usize
 /// * `timeout_msecs` - usize
+#[cfg(target_arch = "x86_64")]
 pub fn syscall_poll(args: [usize; 6]) -> SyscallResult {
     let ufds = args[0] as *mut PollFd;
     let nfds = args[1];
@@ -233,8 +235,8 @@ pub fn syscall_poll(args: [usize; 6]) -> SyscallResult {
             fds.push(*(ufds.add(i)));
         }
     }
-    let expire_time =
-        current_ticks() as usize + TimeVal::from_micro(timeout_msecs).turn_to_ticks() as usize;
+    let expire_time = current_ticks() as usize
+        + crate::TimeVal::from_micro(timeout_msecs).turn_to_ticks() as usize;
 
     let (set, ret_fds) = ppoll(fds, expire_time);
     // 将得到的fd存储到原先的指针中
@@ -302,6 +304,7 @@ fn init_fd_set(addr: *mut usize, len: usize) -> Result<PpollFdSet, SyscallError>
 /// * `writefds` - *mut usize
 /// * `exceptfds` - *mut usize
 /// * `timeout` - *const TimeSecs
+#[cfg(target_arch = "x86_64")]
 pub fn syscall_select(mut args: [usize; 6]) -> SyscallResult {
     args[5] = 0;
     syscall_pselect6(args)
@@ -397,9 +400,12 @@ pub fn syscall_pselect6(args: [usize; 6]) -> SyscallResult {
         if current_ticks() as usize > expire_time {
             return Ok(0);
         }
+        // TODO: fix this and use mask to ignore specific signal
         #[cfg(feature = "signal")]
-        if process.have_signals().is_some() {
-            return Err(SyscallError::EINTR);
+        if let Some(signalno) = process.have_signals() {
+            if signalno == SignalNo::SIGKILL as usize {
+                return Err(SyscallError::EINTR);
+            }
         }
     }
 }

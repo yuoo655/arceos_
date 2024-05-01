@@ -89,6 +89,10 @@ make A=apps/monolithic_userboot ARCH=riscv64 APP_FEATURES=batch run
 
 ```
 
+### `macOS`下原生运行`StarryOS`
+
+[点击查看详细说明文档](./README-macOS.md)
+
 ## CI 说明
 本项目的 CI 结构继承了 arceos 的 CI 结构，同时在其上加入了宏内核的测试用例，以求保证该项目可以在宏内核和 Unikernel 架构以及不同的指令集架构下正常运行。
 

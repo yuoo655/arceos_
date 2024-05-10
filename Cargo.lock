@@ -554,6 +554,7 @@ dependencies = [
  "bitflags 2.4.0",
  "cfg-if",
  "crate_interface",
+ "eventfd",
  "kernel_guard",
  "lazy_init",
  "num_enum",

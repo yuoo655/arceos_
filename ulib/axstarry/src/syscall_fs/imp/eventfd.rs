@@ -1,7 +1,6 @@
-use alloc::sync::Arc;
 use axprocess::current_process;
 
-use crate::syscall_fs::ctype::eventfd::EventFd;
+use crate::syscall_fs::ctype::eventfd::create_eventfd;
 use crate::{SyscallError, SyscallResult};
 
 pub fn syscall_eventfd(args: [usize; 6]) -> SyscallResult {
@@ -16,7 +15,6 @@ pub fn syscall_eventfd(args: [usize; 6]) -> SyscallResult {
         return Err(SyscallError::EPERM);
     };
 
-    fd_table[fd_num] = Some(Arc::new(EventFd::new(initval, flags)));
-
+    fd_table[fd_num] = Some(create_eventfd(initval, flags));
     Ok(fd_num as isize)
 }

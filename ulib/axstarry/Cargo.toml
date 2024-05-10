@@ -84,6 +84,7 @@ axsync = { path = "../../modules/axsync", optional = true }
 axmem = { path = "../../modules/axmem" }
 
 crate_interface = { path = "../../crates/crate_interface" }
+eventfd = { path = "../../crates/eventfd" }
 lazy_init = { path = "../../crates/lazy_init" }
 spinlock = { path = "../../crates/spinlock" }
 kernel_guard = { path = "../../crates/kernel_guard" }

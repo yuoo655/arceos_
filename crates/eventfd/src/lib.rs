@@ -95,6 +95,16 @@ impl EventFd {
         self.flags & flag.bits() != 0
     }
 
+    /// The file descriptor is readable if the counter has a value greater than 0
+    pub fn ready_to_read(&self) -> bool {
+        self.value > 0
+    }
+
+    /// The file descriptor is writable if it is possible to write a value of at least "1" without blocking.
+    pub fn ready_to_write(&self) -> bool {
+        self.value < u64::MAX - 1
+    }
+
     fn is_semaphore_set(&self) -> bool {
         self.is_flag_set(EventFdFlag::EFD_SEMAPHORE)
     }
@@ -191,5 +201,26 @@ mod tests {
         assert_eq!(EventFdWriteResult::OK, event_fd.write(1));
 
         assert_eq!(Some(u64::MAX - 1), event_fd.read());
+    }
+
+    #[test]
+    fn test_ready_to_read() {
+        let event_fd1: EventFd = 0.into();
+        assert!(!event_fd1.ready_to_read());
+
+        let event_fd2: EventFd = 42.into();
+        assert!(event_fd2.ready_to_read());
+    }
+
+    #[test]
+    fn test_ready_to_write() {
+        let event_fd1: EventFd = 0.into();
+        assert!(event_fd1.ready_to_write());
+
+        let event_fd2: EventFd = (u64::MAX - 2).into();
+        assert!(event_fd2.ready_to_write());
+
+        let event_fd2: EventFd = (u64::MAX - 1).into();
+        assert!(!event_fd2.ready_to_write());
     }
 }

@@ -44,6 +44,9 @@ pub struct EpollEvent {
     pub event_type: EpollEventType,
     /// 事件中使用到的数据，如fd等
     pub data: u64,
+    pub fd: i32,
+    pub data_u32: u32,
+    pub data_u64: u64,
 }
 
 numeric_enum_macro::numeric_enum! {
@@ -91,6 +94,15 @@ impl EpollFile {
         }
     }
 
+    /// 判断fd是否在monitor_list中
+    pub fn contains(&self, fd: i32) -> bool {
+        let inner = self.inner.lock();
+        if inner.monitor_list.contains_key(&fd) {
+            return true;
+        }
+        false
+    }
+
     /// 控制指定的事件，改变其对应的事件内容
     ///
     /// 成功返回0，错误返回对应的编号
@@ -105,7 +117,9 @@ impl EpollFile {
             // 添加事件
             EpollCtl::ADD => {
                 if inner.monitor_list.contains_key(&fd) {
-                    return Err(SyscallError::EEXIST);
+                    // return Err(SyscallError::EEXIST);
+                    // TODO : fd close callback ?
+                    inner.monitor_list.insert(fd, event);
                 }
                 inner.monitor_list.insert(fd, event);
             }
@@ -150,8 +164,8 @@ impl EpollFile {
         let mut ret_events = Vec::new();
         loop {
             let current_process = current_process();
-            let fd_table = current_process.fd_manager.fd_table.lock();
             for req_event in events.iter() {
+                let fd_table = current_process.fd_manager.fd_table.lock();
                 if let Some(file) = &fd_table[req_event.data as usize] {
                     let mut ret_event_type = EpollEventType::empty();
                     if file.is_hang_up() {
@@ -181,6 +195,9 @@ impl EpollFile {
                     ret_events.push(EpollEvent {
                         event_type: EpollEventType::EPOLLERR,
                         data: req_event.data,
+                        fd: -1,
+                        data_u32: 0,
+                        data_u64: 0,
                     });
                 }
             }

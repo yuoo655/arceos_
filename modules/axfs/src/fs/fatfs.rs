@@ -163,13 +163,22 @@ impl VfsNodeOps for DirWrapper<'static> {
         }
 
         // TODO: use `fatfs::Dir::find_entry`, but it's not public.
-        if let Ok(file) = self.0.open_file(path) {
-            Ok(FatFileSystem::new_file(file))
-        } else if let Ok(dir) = self.0.open_dir(path) {
-            Ok(FatFileSystem::new_dir(dir))
-        } else {
-            Err(VfsError::NotFound)
+        if let Some((dir, rest)) = path.split_once('/') {
+            return self.lookup(dir)?.lookup(rest);
         }
+        for entry in self.0.iter() {
+            let Ok(entry) = entry else {
+                return Err(VfsError::Io);
+            };
+            if entry.file_name() == path {
+                if entry.is_file() {
+                    return Ok(FatFileSystem::new_file(entry.to_file()));
+                } else if entry.is_dir() {
+                    return Ok(FatFileSystem::new_dir(entry.to_dir()));
+                }
+            }
+        }
+        Err(VfsError::NotFound)
     }
 
     fn create(&self, path: &str, ty: VfsNodeType) -> VfsResult {

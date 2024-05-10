@@ -60,7 +60,7 @@ pub struct Process {
     pub exit_code: AtomicI32,
 
     /// 地址空间
-    pub memory_set: Arc<Mutex<MemorySet>>,
+    pub memory_set: Mutex<Arc<Mutex<MemorySet>>>,
 
     /// 用户堆基址，任何时候堆顶都不能比这个值小，理论上讲是一个常量
     pub heap_bottom: AtomicU64,
@@ -172,7 +172,7 @@ impl Process {
     pub fn new(
         pid: u64,
         parent: u64,
-        memory_set: Arc<Mutex<MemorySet>>,
+        memory_set: Mutex<Arc<Mutex<MemorySet>>>,
         heap_bottom: u64,
         fd_table: Vec<Option<Arc<dyn FileIO>>>,
     ) -> Self {
@@ -197,7 +197,7 @@ impl Process {
     /// 根据给定参数创建一个新的进程，作为应用程序初始进程
     pub fn init(args: Vec<String>, envs: &Vec<String>) -> AxResult<AxTaskRef> {
         let path = args[0].clone();
-        let mut memory_set = MemorySet::new_with_kernel_mapped();
+        let mut memory_set = MemorySet::new_memory_set();
         #[cfg(feature = "signal")]
         {
             use axhal::mem::virt_to_phys;
@@ -233,7 +233,7 @@ impl Process {
         let new_process = Arc::new(Self::new(
             TaskId::new().as_u64(),
             KERNEL_PROCESS_ID,
-            Arc::new(Mutex::new(memory_set)),
+            Mutex::new(Arc::new(Mutex::new(memory_set))),
             heap_bottom.as_usize() as u64,
             vec![
                 // 标准输入
@@ -333,7 +333,25 @@ impl Process {
         // 处理分配的页帧
         // 之后加入额外的东西之后再处理其他的包括信号等因素
         // 不是直接删除原有地址空间，否则构建成本较高。
-        self.memory_set.lock().unmap_user_areas();
+
+        if Arc::strong_count(&self.memory_set.lock()) == 1 {
+            self.memory_set.lock().lock().unmap_user_areas();
+        } else {
+            let memory_set = Arc::new(Mutex::new(MemorySet::clone_or_err(
+                &self.memory_set.lock().lock(),
+            )?));
+            *self.memory_set.lock() = memory_set;
+            self.memory_set.lock().lock().unmap_user_areas();
+            let new_page_table = self.memory_set.lock().lock().page_table_token();
+            let mut tasks = self.tasks.lock();
+            for task in tasks.iter_mut() {
+                task.inner().set_page_table_token(new_page_table);
+            }
+            // 切换到新的页表上
+            unsafe {
+                axhal::arch::write_page_table_root0(new_page_table.into());
+            }
+        }
         // 清空用户堆，重置堆顶
         axhal::arch::flush_tlb(None);
 
@@ -369,18 +387,19 @@ impl Process {
         } else {
             args
         };
-        let (entry, user_stack_bottom, heap_bottom) =
-            if let Ok(ans) = load_app(name.clone(), args, envs, &mut self.memory_set.lock()) {
-                ans
-            } else {
-                error!("Failed to load app {}", name);
-                return Err(AxError::NotFound);
-            };
+        let (entry, user_stack_bottom, heap_bottom) = if let Ok(ans) =
+            load_app(name.clone(), args, envs, &mut self.memory_set.lock().lock())
+        {
+            ans
+        } else {
+            error!("Failed to load app {}", name);
+            return Err(AxError::NotFound);
+        };
         // 切换了地址空间， 需要切换token
         let page_table_token = if self.pid == KERNEL_PROCESS_ID {
             0
         } else {
-            self.memory_set.lock().page_table_token()
+            self.memory_set.lock().lock().page_table_token()
         };
         if page_table_token != 0 {
             unsafe {
@@ -411,7 +430,8 @@ impl Process {
             // 生成信号跳板
             let signal_trampoline_vaddr: VirtAddr = (axconfig::SIGNAL_TRAMPOLINE).into();
             let signal_trampoline_paddr = virt_to_phys((start_signal_trampoline as usize).into());
-            let mut memory_set = self.memory_set.lock();
+            let memory_set_wrapper = self.memory_set.lock();
+            let mut memory_set = memory_set_wrapper.lock();
             if memory_set.query(signal_trampoline_vaddr).is_err() {
                 let _ = memory_set.map_page_without_alloc(
                     signal_trampoline_vaddr,
@@ -450,10 +470,10 @@ impl Process {
         // }
         // 是否共享虚拟地址空间
         let new_memory_set = if flags.contains(CloneFlags::CLONE_VM) {
-            Arc::clone(&self.memory_set)
+            Mutex::new(Arc::clone(&self.memory_set.lock()))
         } else {
             let memory_set = Arc::new(Mutex::new(MemorySet::clone_or_err(
-                &self.memory_set.lock(),
+                &self.memory_set.lock().lock(),
             )?));
             #[cfg(feature = "signal")]
             {
@@ -472,7 +492,7 @@ impl Process {
                         | MappingFlags::WRITE,
                 )?;
             }
-            memory_set
+            Mutex::new(memory_set)
         };
 
         // 在生成新的进程前，需要决定其所属进程是谁
@@ -497,7 +517,7 @@ impl Process {
             String::from(self.tasks.lock()[0].name().split('/').last().unwrap()),
             axconfig::TASK_STACK_SIZE,
             process_id,
-            new_memory_set.lock().page_table_token(),
+            new_memory_set.lock().lock().page_table_token(),
             #[cfg(feature = "signal")]
             sig_child,
         );
@@ -513,7 +533,6 @@ impl Process {
             .insert(new_task.id().as_u64(), Arc::clone(&new_task));
         #[cfg(feature = "signal")]
         let new_handler = if flags.contains(CloneFlags::CLONE_SIGHAND) {
-            // let curr_id = current().id().as_u64();
             self.signal_modules
                 .lock()
                 .get_mut(&current().id().as_u64())
@@ -530,7 +549,6 @@ impl Process {
                     .lock()
                     .clone(),
             ))
-            // info!("curr_id: {:X}", (&curr_id as *const _ as usize));
         };
         // 检查是否在父任务中写入当前新任务的tid
         if flags.contains(CloneFlags::CLONE_PARENT_SETTID)
@@ -569,7 +587,8 @@ impl Process {
                     return Err(AxError::BadAddress);
                 }
             } else {
-                let mut vm = new_memory_set.lock();
+                let memory_set_wrapper = self.memory_set.lock();
+                let mut vm = memory_set_wrapper.lock();
                 // 否则需要在新的地址空间中进行分配
                 if vm.manual_alloc_for_lazy(ctid.into()).is_ok() {
                     // 此时token没有发生改变，所以不能直接解引用访问，需要手动查页表
@@ -601,13 +620,6 @@ impl Process {
         let return_id: u64;
         // 决定是创建线程还是进程
         if flags.contains(CloneFlags::CLONE_THREAD) {
-            // // 若创建的是线程，那么不用新建进程
-            // info!("task len: {}", inner.tasks.len());
-            // info!("task address :{:X}", (&new_task as *const _ as usize));
-            // info!(
-            //     "task address: {:X}",
-            //     (&Arc::clone(&new_task)) as *const _ as usize
-            // );
             self.tasks.lock().push(Arc::clone(&new_task));
             #[cfg(feature = "signal")]
             self.signal_modules.lock().insert(
@@ -669,10 +681,6 @@ impl Process {
         // 没有给定用户栈的时候，只能是共享了地址空间，且原先调用clone的有用户栈，此时已经在之前的trap clone时复制了
         if let Some(stack) = stack {
             trap_frame.set_user_sp(stack);
-            // info!(
-            //     "New user stack: sepc:{:X}, stack:{:X}",
-            //     trap_frame.sepc, trap_frame.regs.sp
-            // );
         }
         new_task.set_trap_context(trap_frame);
         new_task.set_trap_in_kernel_stack();
@@ -690,19 +698,23 @@ impl Process {
 impl Process {
     /// alloc physical memory for lazy allocation manually
     pub fn manual_alloc_for_lazy(&self, addr: VirtAddr) -> AxResult<()> {
-        self.memory_set.lock().manual_alloc_for_lazy(addr)
+        self.memory_set.lock().lock().manual_alloc_for_lazy(addr)
     }
 
     /// alloc range physical memory for lazy allocation manually
     pub fn manual_alloc_range_for_lazy(&self, start: VirtAddr, end: VirtAddr) -> AxResult<()> {
         self.memory_set
             .lock()
+            .lock()
             .manual_alloc_range_for_lazy(start, end)
     }
 
     /// alloc physical memory with the given type size for lazy allocation manually
     pub fn manual_alloc_type_for_lazy<T: Sized>(&self, obj: *const T) -> AxResult<()> {
-        self.memory_set.lock().manual_alloc_type_for_lazy(obj)
+        self.memory_set
+            .lock()
+            .lock()
+            .manual_alloc_type_for_lazy(obj)
     }
 }
 

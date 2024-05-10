@@ -59,6 +59,7 @@ pub fn syscall_fstatat(args: [usize; 6]) -> SyscallResult {
     let path = args[1] as *const u8;
     let kst = args[2] as *mut Kstat;
     let file_path = if let Some(file_path) = deal_with_path(dir_fd, Some(path), false) {
+        // error!("test {:?}", file_path);
         file_path
     } else {
         // x86 下应用会调用 newfstatat(1, "", {st_mode=S_IFCHR|0620, st_rdev=makedev(0x88, 0xe), ...}, AT_EMPTY_PATH) = 0
@@ -94,6 +95,7 @@ pub fn syscall_fstatat(args: [usize; 6]) -> SyscallResult {
 /// # Arguments
 /// * `path` - *const u8
 /// * `kst` - *mut Kstat
+#[cfg(target_arch = "x86_64")]
 pub fn syscall_lstat(args: [usize; 6]) -> SyscallResult {
     let path = args[0];
     let kst = args[1];
@@ -105,6 +107,7 @@ pub fn syscall_lstat(args: [usize; 6]) -> SyscallResult {
 /// # Arguments
 /// * `path` - *const u8
 /// * `stat_ptr` - *mut Kstat
+#[cfg(target_arch = "x86_64")]
 pub fn syscall_stat(args: [usize; 6]) -> SyscallResult {
     let path = args[0];
     let stat_ptr = args[1];

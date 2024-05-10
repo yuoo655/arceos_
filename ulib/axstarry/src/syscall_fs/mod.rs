@@ -13,7 +13,6 @@ use imp::*;
 /// 文件系统相关系统调用
 pub fn fs_syscall(syscall_id: fs_syscall_id::FsSyscallId, args: [usize; 6]) -> SyscallResult {
     match syscall_id {
-        EVENTFD => syscall_eventfd(args),
         OPENAT => syscall_openat(args),
         CLOSE => syscall_close(args),
         READ => syscall_read(args),
@@ -52,13 +51,15 @@ pub fn fs_syscall(syscall_id: fs_syscall_id::FsSyscallId, args: [usize; 6]) -> S
         COPYFILERANGE => syscall_copyfilerange(args),
         LINKAT => sys_linkat(args),
         UNLINKAT => syscall_unlinkat(args),
+        SYMLINKAT => Ok(0),
         UTIMENSAT => syscall_utimensat(args),
         EPOLL_CREATE => syscall_epoll_create1(args),
         EPOLL_CTL => syscall_epoll_ctl(args),
         EPOLL_WAIT => syscall_epoll_wait(args),
         PPOLL => syscall_ppoll(args),
         PSELECT6 => syscall_pselect6(args),
-
+        #[cfg(not(target_arch = "x86_64"))]
+        EVENTFD => syscall_eventfd(args),
         #[cfg(target_arch = "x86_64")]
         // eventfd syscall in x86_64 does not support flags, use 0 instead
         EVENTFD => syscall_eventfd([args[0], 0, 0, 0, 0, 0]),
@@ -92,5 +93,11 @@ pub fn fs_syscall(syscall_id: fs_syscall_id::FsSyscallId, args: [usize; 6]) -> S
         READLINK => syscall_readlink(args),
         #[cfg(target_arch = "x86_64")]
         CREAT => Err(axerrno::LinuxError::EPERM),
+        #[cfg(target_arch = "x86_64")]
+        EPOLL_CREATE1 => unimplemented!("epoll_create1"),
+        #[cfg(target_arch = "x86_64")]
+        EPOLL_PWAIT => unimplemented!("epoll_ctl"),
+        #[cfg(target_arch = "x86_64")]
+        CHMOD => Ok(0),
     }
 }

@@ -1,6 +1,6 @@
 //! The epoll API performs a similar task to poll: monitoring
 //! multiple file descriptors to see if I/O is possible on any of
-//! them.  
+//! them.
 extern crate alloc;
 use crate::{SyscallError, SyscallResult};
 use alloc::sync::Arc;
@@ -91,20 +91,26 @@ pub fn syscall_epoll_wait(args: [usize; 6]) -> SyscallResult {
     let max_event = max_event as usize;
     let process = current_process();
     let start: VirtAddr = (event as usize).into();
+    // FIXME: this is a temporary solution
+    // the memory will out of mapped memory if the max_event is too large
+    // maybe give the max_event a limit is a better solution
+    let max_event = core::cmp::min(max_event, 400);
     let end = start + max_event * core::mem::size_of::<EpollEvent>();
     if process.manual_alloc_range_for_lazy(start, end).is_err() {
         return Err(SyscallError::EFAULT);
     }
 
-    let fd_table = process.fd_manager.fd_table.lock();
-    let epoll_file = if let Some(file) = fd_table[epfd as usize].as_ref() {
-        if let Some(epoll_file) = file.as_any().downcast_ref::<EpollFile>() {
-            epoll_file.clone()
+    let epoll_file = {
+        let fd_table = process.fd_manager.fd_table.lock();
+        if let Some(file) = fd_table[epfd as usize].as_ref() {
+            if let Some(epoll_file) = file.as_any().downcast_ref::<EpollFile>() {
+                epoll_file.clone()
+            } else {
+                return Err(SyscallError::EBADF);
+            }
         } else {
             return Err(SyscallError::EBADF);
         }
-    } else {
-        return Err(SyscallError::EBADF);
     };
 
     let timeout = if timeout > 0 {

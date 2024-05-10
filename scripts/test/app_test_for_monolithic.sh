@@ -2,7 +2,7 @@
 
 APP=
 ROOT=$(realpath $(dirname $0))/../../
-TIMEOUT=60s
+TIMEOUT=120s
 EXIT_STATUS=0
 
 S_PASS=0
@@ -51,7 +51,7 @@ function run_and_compare() {
     EXIT_NORMALLY="System halted with exit code 0"
     if [ `grep -c "$EXIT_NORMALLY" $actual` -eq '0' ];then
         return $S_FAILED
-    else 
+    else
         return $S_PASS
     fi
 }

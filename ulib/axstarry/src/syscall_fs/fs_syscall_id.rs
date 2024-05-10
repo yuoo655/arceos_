@@ -24,6 +24,7 @@ pub enum FsSyscallId {
     FCNTL64 = 25,
     IOCTL = 29,
     MKDIRAT = 34,
+    SYMLINKAT = 36,
     UNLINKAT = 35,
     LINKAT = 37,
     RENAMEAT = 38,
@@ -82,6 +83,7 @@ numeric_enum_macro::numeric_enum! {
         FCNTL64 = 72,
         IOCTL = 16,
         MKDIRAT = 258,
+        SYMLINKAT = 266,
         RENAME = 82,
         MKDIR = 83,
         RMDIR = 84,
@@ -115,6 +117,7 @@ numeric_enum_macro::numeric_enum! {
         SELECT = 23,
         PSELECT6 = 270,
         READLINK = 89,
+        CHMOD = 90,
         PREADLINKAT = 267,
         FSTAT = 5,
         LSTAT = 6,
@@ -124,5 +127,7 @@ numeric_enum_macro::numeric_enum! {
         RENAMEAT = 264,
         RENAMEAT2 = 316,
         COPYFILERANGE = 326,
+        EPOLL_CREATE1 = 291,
+        EPOLL_PWAIT = 281,
     }
 }

@@ -10,10 +10,11 @@ use axfs::api::{FileIOType, OpenFlags, SeekFrom};
 
 use axlog::{debug, info};
 use axprocess::current_process;
-use axprocess::link::{create_link, deal_with_path, real_path, AT_FDCWD};
+use axprocess::link::{create_link, deal_with_path, real_path};
 
 use crate::syscall_fs::ctype::{
     dir::new_dir,
+    epoll::{EpollCtl, EpollEvent, EpollEventType, EpollFile},
     file::{new_fd, new_inode},
     pipe::make_pipe,
 };
@@ -223,14 +224,13 @@ pub fn syscall_writev(args: [usize; 6]) -> SyscallResult {
 /// 注意:`fd[2]`是32位数组,所以这里的 fd 是 u32 类型的指针,而不是 usize 类型的指针。
 pub fn syscall_pipe2(args: [usize; 6]) -> SyscallResult {
     let fd = args[0] as *mut u32;
-    let flags = args[1];
+    let flags = args[1] as u32;
     axlog::info!("Into syscall_pipe2. fd: {} flags: {}", fd as usize, flags);
     let process = current_process();
     if process.manual_alloc_for_lazy((fd as usize).into()).is_err() {
         return Err(SyscallError::EINVAL);
     }
-    let non_block = (flags & 0x800) != 0;
-    let (read, write) = make_pipe(non_block);
+    let (read, write) = make_pipe(OpenFlags::from_bits_truncate(flags));
     let mut fd_table = process.fd_manager.fd_table.lock();
     let fd_num = if let Ok(fd) = process.alloc_fd(&mut fd_table) {
         fd
@@ -258,6 +258,7 @@ pub fn syscall_pipe2(args: [usize; 6]) -> SyscallResult {
 /// 返回值:成功执行,返回0。失败,返回-1。
 ///
 /// 注意:`fd[2]`是32位数组,所以这里的 fd 是 u32 类型的指针,而不是 usize 类型的指针。
+#[cfg(target_arch = "x86_64")]
 pub fn syscall_pipe(mut args: [usize; 6]) -> SyscallResult {
     args[1] = 0;
     syscall_pipe2(args)
@@ -296,6 +297,7 @@ pub fn syscall_dup(args: [usize; 6]) -> SyscallResult {
 /// * fd: usize, 原文件所在的文件描述符
 /// * new_fd: usize, 新的文件描述符
 /// 返回值:成功执行,返回新的文件描述符。失败,返回-1。
+#[cfg(target_arch = "x86_64")]
 pub fn syscall_dup2(args: [usize; 6]) -> SyscallResult {
     syscall_dup3(args)
 }
@@ -405,7 +407,10 @@ pub fn syscall_openat(args: [usize; 6]) -> SyscallResult {
 ///
 /// 说明:如果打开的是一个目录,那么返回的文件描述符指向的是该目录的描述符。(后面会用到针对目录的文件描述符)
 /// flags: O_RDONLY: 0, O_WRONLY: 1, O_RDWR: 2, O_CREAT: 64, O_DIRECTORY: 65536
+#[cfg(target_arch = "x86_64")]
 pub fn syscall_open(args: [usize; 6]) -> SyscallResult {
+    use axprocess::link::AT_FDCWD;
+
     let temp_args = [AT_FDCWD, args[0], args[1], args[2], 0, 0];
     syscall_openat(temp_args)
 }
@@ -433,6 +438,23 @@ pub fn syscall_close(args: [usize; 6]) -> SyscallResult {
         return Err(SyscallError::EPERM);
     }
     // let file = process_inner.fd_manager.fd_table[fd].unwrap();
+    for i in 0..fd_table.len() {
+        if let Some(file) = fd_table[i].as_ref() {
+            if let Some(epoll_file) = file.as_any().downcast_ref::<EpollFile>() {
+                if epoll_file.contains(fd as i32) {
+                    let ev = EpollEvent {
+                        event_type: EpollEventType::EPOLLMSG,
+                        data: 0,
+                        fd: -1,
+                        data_u32: 0,
+                        data_u64: 0,
+                    };
+                    epoll_file.epoll_ctl(EpollCtl::DEL, fd as i32, ev)?;
+                }
+            }
+        }
+    }
+
     fd_table[fd] = None;
     // for i in 0..process_inner.fd_table.len() {
     //     if let Some(file) = process_inner.fd_table[i].as_ref() {
@@ -574,6 +596,7 @@ pub fn syscall_readlinkat(args: [usize; 6]) -> SyscallResult {
     }
 
     let path = deal_with_path(dir_fd, Some(path), false);
+
     if path.is_none() {
         return Err(SyscallError::ENOENT);
     }
@@ -618,7 +641,10 @@ pub fn syscall_readlinkat(args: [usize; 6]) -> SyscallResult {
 /// * `path`: *const u8
 /// * `buf`: *mut u8
 /// * `bufsiz`: usize
+#[cfg(target_arch = "x86_64")]
 pub fn syscall_readlink(args: [usize; 6]) -> SyscallResult {
+    use axprocess::link::AT_FDCWD;
+
     let temp_args = [AT_FDCWD, args[0], args[1], args[2], 0, 0];
     syscall_readlinkat(temp_args)
 }

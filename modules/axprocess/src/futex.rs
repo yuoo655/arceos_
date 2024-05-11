@@ -4,14 +4,41 @@ use axhal::mem::VirtAddr;
 use axsync::Mutex;
 use axtask::{AxTaskRef, WaitQueue};
 
+use crate::current_process;
+
 extern crate alloc;
 
 /// vec中的元素分别是任务指针,对应存储时的futex变量的值
-pub static FUTEX_WAIT_TASK: Mutex<BTreeMap<VirtAddr, VecDeque<(AxTaskRef, u32)>>> =
+pub static FUTEX_WAIT_TASK: Mutex<BTreeMap<FutexKey, VecDeque<(AxTaskRef, u32)>>> =
     Mutex::new(BTreeMap::new());
 
 /// waiting queue which stores tasks waiting for futex variable
 pub static WAIT_FOR_FUTEX: WaitQueue = WaitQueue::new();
+
+/// Futexes are matched on equal values of this key.
+///
+/// The key type depends on whether it's a shared or private mapping.
+/// use pid to replace the mm_struct pointer
+#[derive(Copy, Clone, Default, Ord, PartialOrd, Eq, PartialEq)]
+pub struct FutexKey {
+    ptr: u64,
+    word: usize,
+    offset: u32,
+}
+
+impl FutexKey {
+    fn new(ptr: u64, word: usize, offset: u32) -> Self {
+        Self { ptr, word, offset }
+    }
+}
+/// 获取futex变量的key
+/// TODO: shared futex and error handling
+pub fn get_futex_key(uaddr: VirtAddr, _flags: i32) -> FutexKey {
+    let ptr = current_process().pid();
+    let offset = uaddr.align_offset_4k() as u32;
+    let word = uaddr.align_down_4k().as_usize();
+    FutexKey::new(ptr, word, offset)
+}
 
 #[derive(Default)]
 /// 用于存储 robust list 的结构

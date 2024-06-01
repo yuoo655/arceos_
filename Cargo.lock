@@ -1137,6 +1137,7 @@ dependencies = [
 [[package]]
 name = "ext4_rs"
 version = "1.0.0"
+source = "git+https://github.com/yuoo655/ext4_rs.git#12935fc7c17325939e407f60b27f98894047cb2d"
 dependencies = [
  "bitflags 2.4.0",
  "log",

@@ -144,7 +144,7 @@ impl VfsNodeOps for Ext4FileWrapper {
         let inode_mode = root_inode_ref.inner.inode.mode;
         let size = ext4_file.fsize;
         // BLOCK_SIZE / DISK_BLOCK_SIZE
-        let blocks = root_inode_ref.inner.inode.blocks_lo * 8;
+        let blocks = root_inode_ref.inner.inode.blocks * 8;
         let (ty, perm) = map_imode(inode_mode as u16);
         drop(ext4_file);
         Ok(VfsNodeAttr::new(perm, ty, size as _, blocks as _))
@@ -216,13 +216,8 @@ impl VfsNodeOps for Ext4FileWrapper {
     ///
     /// Return the node if found.
     fn lookup(self: Arc<Self>, path: &str) -> VfsResult<VfsNodeRef> {
-        if path == "" {
-            log::error!("open root");
-        }
         let mut ext4_file = self.ext4_file.lock();
         let r = self.ext4.ext4_open(&mut ext4_file, path, "r+", false);
-
-        // log::error!("lookup path {:?} file size {:x?}", path, ext4_file.fsize);
 
         if let Err(e) = r {
             match e.error() {
@@ -243,8 +238,6 @@ impl VfsNodeOps for Ext4FileWrapper {
     ///
     /// Return [`Ok(())`](Ok) if it already exists.
     fn create(&self, path: &str, ty: VfsNodeType) -> VfsResult {
-        log::error!("create {:x?}", path);
-
         let types = match ty {
             VfsNodeType::Fifo => DirEntryType::EXT4_DE_FIFO,
             VfsNodeType::CharDevice => DirEntryType::EXT4_DE_CHRDEV,
@@ -276,7 +269,6 @@ impl VfsNodeOps for Ext4FileWrapper {
     /// Read directory entries into `dirents`, starting from `start_idx`.
     fn read_dir(&self, start_idx: usize, dirents: &mut [VfsDirEntry]) -> VfsResult<usize> {
         let ext4_file = self.ext4_file.lock();
-        log::error!("read_dir_inode: {:?}", ext4_file.inode);
         let inode_num = ext4_file.inode;
         let entries: Vec<Ext4DirEntry> = self.ext4.read_dir_entry(inode_num as _);
 
@@ -292,7 +284,6 @@ impl VfsNodeOps for Ext4FileWrapper {
                     let file_type = unsafe { ext4direntry.inner.inode_type };
                     let (ty, _) = map_dir_imode(file_type as u16);
                     let name = get_name(name, name_len as usize).unwrap();
-                    log::error!("de name {:}", name);
                     *out_entry = VfsDirEntry::new(name.as_str(), ty);
                 }
                 _ => return Ok(i),
@@ -325,7 +316,7 @@ fn map_dir_imode(imode: u16) -> (VfsNodeType, VfsNodePerm) {
         DirEntryType::EXT4_DE_SOCK => VfsNodeType::Socket,
         DirEntryType::EXT4_DE_SYMLINK => VfsNodeType::SymLink,
         _ => {
-            log::info!("{:x?}", imode);
+            // log::info!("{:x?}", imode);
             VfsNodeType::File
         }
     };
@@ -377,7 +368,7 @@ fn map_imode(imode: u16) -> (VfsNodeType, VfsNodePerm) {
         EXT4_INODE_MODE_SOFTLINK => VfsNodeType::SymLink,
         EXT4_INODE_MODE_SOCKET => VfsNodeType::Socket,
         _ => {
-            log::info!("{:x?}", imode);
+            // log::info!("{:x?}", imode);
             VfsNodeType::File
         }
     };

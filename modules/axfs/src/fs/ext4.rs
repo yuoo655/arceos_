@@ -308,13 +308,8 @@ impl VfsNodeOps for Ext4FileWrapper {
         todo!()
     }
 
-    /// Convert `&self` to [`&dyn Any`][1] that can use
-    /// [`Any::downcast_ref`][2].
-    ///
-    /// [1]: core::any::Any
-    /// [2]: core::any::Any#method.downcast_ref
     fn as_any(&self) -> &dyn core::any::Any {
-        unimplemented!()
+        self as &dyn core::any::Any
     }
 }
 

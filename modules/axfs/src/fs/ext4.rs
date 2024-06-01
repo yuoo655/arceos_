@@ -300,7 +300,7 @@ impl VfsNodeOps for Ext4FileWrapper {
         }
 
         drop(ext4_file);
-        Ok(len)
+        Ok(dirents.len())
     }
 
     /// Renames or moves existing file or directory.
